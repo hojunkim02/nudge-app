@@ -75,7 +75,8 @@ function viewToday() {
     const cs = store.checksForDate(d);
     const dn = store.dayChecks(k);
     const all = cs.length && cs.every((c) => dn[c.id] || (c.optional && s.lunch[k] === "no"));
-    return `<button class="day-dot ${k === key ? "today" : all ? "done" : ""}" data-day="${k}">${store.WEEKDAYS[d.getDay()]}</button>`;
+    const cls = ["day-dot", k === key ? "today" : "", all ? "done" : "", k === todayKey ? "is-today" : ""].filter(Boolean).join(" ");
+    return `<button class="${cls}" data-day="${k}">${store.WEEKDAYS[d.getDay()]}</button>`;
   }).join("");
 
   const pending = store.pendingSessions();
@@ -94,23 +95,10 @@ function viewToday() {
     </div>` : "";
 
   const timerHtml = s.timer
-    ? `<div class="timer">
-        <div class="timer-time" id="timer-clock">…</div>
-        <p class="timer-meta">${esc(s.timer.label)}${s.timer.pausedAt ? " · 일시정지" : " 측정 중"}${s.timer.kind === "extra" ? " (추가 자습)" : ""}</p>
-        <div class="timer-actions">
-          ${s.timer.pausedAt
-            ? `<button class="btn" id="btn-resume">재개</button>`
-            : `<button class="btn" id="btn-pause">일시정지</button>`}
-          <button class="btn primary" id="btn-stop">종료</button>
-        </div>
-      </div>`
-    : `<div class="timer">
-        <div class="timer-time" style="color:var(--fg-tertiary)">00:00</div>
-        <p class="timer-meta">측정 중인 자습이 없습니다</p>
-        <div class="timer-actions">
-          <button class="btn primary" id="btn-start">자습 시작</button>
-          <button class="btn" id="btn-start-extra">추가 자습</button>
-        </div>
+    ? `<p class="muted" style="padding:10px 4px">측정 중 — 하단의 ${esc(s.timer.label)} 바를 눌러 관리하세요</p>`
+    : `<div style="display:flex;gap:10px;padding:10px 0 14px">
+        <button class="btn primary block" id="btn-start">자습 시작</button>
+        <button class="btn block" id="btn-start-extra">추가 자습</button>
       </div>`;
 
   const lunchHtml = (lunchCheck && isToday) ? `
@@ -164,6 +152,7 @@ function viewToday() {
     ${lunchHtml}
     ${isToday ? pendingHtml : ""}
     ${isToday ? `<div class="card"><p class="card-title">자습 타이머</p>${timerHtml}</div>` : ""}
+    ${isToday ? `<div style="height:76px"></div>` : ""}
   `;
 
   titleEl.textContent = "오늘";
@@ -175,7 +164,8 @@ function viewToday() {
   }));
 
   $$("[data-check]").forEach((row) => {
-    row.addEventListener("click", () => {
+    row.addEventListener("click", (e) => {
+      if (!e.target.closest(".check")) return;
       const on = store.toggleCheck(key, row.dataset.check);
       row.classList.toggle("done", on);
       const pct2 = Math.round((checks.filter((c) => (c.id === row.dataset.check ? on : !!store.dayChecks(key)[c.id])).length / Math.max(1, checks.length)) * 100);
@@ -196,12 +186,10 @@ function viewToday() {
     store.setLunch(key, "yes");
     store.setCheck(key, "lunch", true);
     render();
-    toast("점심 자습 예 — 11:50–12:50 일정이 활성화되었습니다");
   });
   $("#lunch-no")?.addEventListener("click", () => {
     store.setLunch(key, "no");
     render();
-    toast("점심 자습 아니오 — 오늘은 쉬어가도 괜찮아요");
   });
 
   const startBtn = $("#btn-start");
@@ -211,19 +199,6 @@ function viewToday() {
     store.startTimer(label);
     render();
   });
-
-  const stopBtn = $("#btn-stop");
-  if (stopBtn) stopBtn.addEventListener("click", () => {
-    const elapsed = Math.round(store.timerElapsedSec() / 60);
-    const sess = store.stopTimer();
-    openAdjustSheet(sess, elapsed);
-    startTimerTick();
-  });
-
-  const pauseBtn = $("#btn-pause");
-  if (pauseBtn) pauseBtn.addEventListener("click", () => { store.pauseTimer(); render(); });
-  const resumeBtn = $("#btn-resume");
-  if (resumeBtn) resumeBtn.addEventListener("click", () => { store.resumeTimer(); render(); });
 
   const extraBtn = $("#btn-start-extra");
   if (extraBtn) extraBtn.addEventListener("click", () => {
@@ -252,7 +227,6 @@ function openAdjustSheet(sess, measured) {
       const reason = $("#adj-reason", sheet).value.trim();
       const s = store.finalizeSession(sess.id, isNaN(v) ? measured : Math.max(0, v), reason);
       close();
-      toast(`자습 ${s.finalMin}분 확정 완료`);
     });
   });
 }
@@ -262,12 +236,91 @@ function startTimerTick() {
   clearInterval(tickTimer);
   tickTimer = setInterval(() => {
     const t = store.get().timer;
-    const el = $("#timer-clock");
+    const el = $("#pill-clock");
     if (!t || !el) { clearInterval(tickTimer); return; }
     const sec = store.timerElapsedSec();
     const p = (n) => String(n).padStart(2, "0");
     el.textContent = `${p(Math.floor(sec / 60))}:${p(sec % 60)}`;
   }, 500);
+}
+
+function renderPill() {
+  document.querySelector(".timer-pill")?.remove();
+  const t = store.get().timer;
+  if (!t) return;
+  const pill = document.createElement("button");
+  pill.className = "timer-pill";
+  pill.id = "timer-pill";
+  pill.innerHTML = `
+    <div class="pill-main">
+      <div class="pill-label">${esc(t.label)}${t.kind === "extra" ? " (추가)" : ""}</div>
+      <div class="pill-sub">${t.pausedAt ? "일시정지 중 · 눌러서 관리" : "측정 중 · 눌러서 관리"}</div>
+    </div>
+    <div class="pill-clock" id="pill-clock">00:00</div>`;
+  pill.addEventListener("click", openTimerSheet);
+  document.body.appendChild(pill);
+  startTimerTick();
+}
+
+function openTimerSheet() {
+  const t = store.get().timer;
+  if (!t) return;
+  const elapsed = Math.round(store.timerElapsedSec() / 60);
+  openSheet(`
+    <h2>${esc(t.label)}${t.kind === "extra" ? " (추가 자습)" : ""}</h2>
+    <p class="muted">측정된 시간: ${fmtMin(elapsed)}${t.pausedAt ? " · 일시정지 중" : ""}</p>
+    <div style="display:flex;gap:10px;padding:10px 0 4px">
+      ${t.pausedAt
+        ? `<button class="btn block" id="pt-resume">재개</button>`
+        : `<button class="btn block" id="pt-pause">일시정지</button>`}
+      <button class="btn primary block" id="pt-stop">종료</button>
+    </div>
+  `, (sheet, close) => {
+    $("#pt-pause", sheet)?.addEventListener("click", () => { store.pauseTimer(); close(); });
+    $("#pt-resume", sheet)?.addEventListener("click", () => { store.resumeTimer(); close(); });
+    $("#pt-stop", sheet).addEventListener("click", () => {
+      const el2 = Math.round(store.timerElapsedSec() / 60);
+      const sess = store.stopTimer();
+      close();
+      openAdjustSheet(sess, el2);
+    });
+  });
+}
+
+/* ── theme ─────────────────────────────── */
+function applyTheme() {
+  const { bw, theme } = store.get().settings;
+  const root = document.documentElement;
+  root.classList.toggle("bw", !!bw);
+  root.classList.toggle("theme-dark", theme === "dark");
+  root.classList.toggle("theme-light", theme === "light");
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    const dark = theme === "dark" || (theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+    meta.setAttribute("content", dark ? "#1C1C1E" : "#F76729");
+  }
+}
+
+/* ── schedule notifications (foreground) ── */
+let notifyTimers = [];
+function scheduleNotifications() {
+  notifyTimers.forEach(clearTimeout);
+  notifyTimers = [];
+  const { notify } = store.get().settings;
+  if (!notify || !("Notification" in window) || Notification.permission !== "granted") return;
+  const now = new Date();
+  for (const it of store.checksForDate(now)) {
+    const m = it.time.match(/(\d{1,2}):(\d{2})/);
+    if (!m) continue;
+    const at = new Date(now);
+    at.setHours(+m[1], +m[2], 0, 0);
+    const delay = at - now;
+    if (delay > 0 && delay < 12 * 3600e3) {
+      notifyTimers.push(setTimeout(() => {
+        try { new Notification("Nudge", { body: `${it.title} 시간입니다 (${it.time})` }); } catch {}
+      }, delay));
+    }
+  }
 }
 
 /* ═════════ VIEW: STUDY ═════════ */
@@ -358,7 +411,6 @@ function viewStudy() {
     if (st === "완료") {
       const name = findLectureName(b.dataset.cycle);
       store.logLectureDone(name);
-      toast("완료로 기록했습니다");
     }
     render();
   }));
@@ -504,7 +556,6 @@ function viewStudy() {
         const reason = $("#g-reason", sheet).value.trim();
         store.setDailyGoal(v, reason);
         close(); render();
-        toast(v === 10 && !reason ? "원 목표로 되돌렸습니다" : `목표를 ${v}강으로 조정했습니다`);
       });
     });
   });
@@ -513,8 +564,11 @@ function viewStudy() {
 /* ═════════ VIEW: WORKOUT ═════════ */
 function viewWorkout() {
   const s = store.get();
-  const part = store.todayWorkout();
-  const key = store.dateKey();
+  const assign = store.workoutAssign();
+  const todayKey = store.dateKey();
+  const key = selDay || todayKey;
+  const selDate = new Date(key + "T00:00:00");
+  const part = store.todayWorkout(selDate);
   const doneToday = store.workoutDoneOn(key);
   const week = store.startOfWeek();
   const weekDone = Array.from({ length: 7 }, (_, i) => {
@@ -522,37 +576,41 @@ function viewWorkout() {
     return store.workoutDoneOn(store.dateKey(d));
   });
   const doneCount = weekDone.filter(Boolean).length;
+  const isRest = part === "휴식";
+  const nextPart = store.WORKOUT_CYCLE[(store.WORKOUT_CYCLE.indexOf(part) + 1) % 5];
+  const isLast = part === "하체";
 
   viewEl.innerHTML = `
     <div class="card">
-      <p class="card-title">오늘의 운동 · ${store.WORKOUT_CYCLE[s.workout.index % 5]}day</p>
-      <div class="timer">
-        <div style="font-size:44px;font-weight:800;padding:8px 0">${part}</div>
-        <p class="timer-meta">${doneToday ? "오늘 완료 ✓ 다음은 " + store.WORKOUT_CYCLE[(s.workout.index + 1) % 5] : "순서: 등 → 가슴 → 어깨 → 팔 → 하체"}</p>
-        <div class="timer-actions">
-          ${doneToday
-            ? `<button class="btn primary" id="btn-workout-undo" style="min-width:150px">오늘 기록 취소</button>`
-            : `<button class="btn primary" id="btn-workout-done" style="min-width:150px">운동 완료</button>
-               <button class="btn" id="btn-workout-rest" style="min-width:150px">휴식으로 기록</button>`}
-        </div>
-      </div>
       <div class="week-strip">
         ${store.WEEKDAYS.map((w, i) => {
           const d = new Date(week); d.setDate(week.getDate() + i);
           const k = store.dateKey(d);
-          return `<button class="day-dot ${weekDone[i] ? "done" : ""}" data-wday="${k}">${w}</button>`;
+          const cls = ["day-dot", k === key ? "today" : "", weekDone[i] ? "done" : "", k === todayKey ? "is-today" : ""].filter(Boolean).join(" ");
+          return `<button class="${cls}" data-wday="${k}">${w}</button>`;
         }).join("")}
       </div>
-      <p class="muted" style="padding:0 4px 4px">이번 주 ${doneCount}회 완료 · 운동을 못 한 날은 같은 종목이 다음 날로 이월되고, 예정된 휴식은 정상 수행으로 기록됩니다</p>
-      <div class="row" style="border-top:0.5px solid var(--sep)">
-        <div class="row-main">
-          <div class="row-title" style="font-size:15px">현재 단계 설정</div>
-          <div class="row-sub">초기 기준: 2026-11-11(수) 어깨</div>
-        </div>
-        <div class="segment" style="margin:0;width:230px">
-          ${store.WORKOUT_CYCLE.map((w, i) => `<button class="${i === s.workout.index % 5 ? "active" : ""}" data-setpart="${i}">${w}</button>`).join("")}
+      <p class="card-title">${store.fmtDate(selDate)} · 오늘의 운동</p>
+      <div class="timer">
+        <div style="font-size:44px;font-weight:800;padding:8px 0">${part}</div>
+        <p class="timer-meta">${isRest ? "예정된 휴식입니다" : "주간 사이클: " + Object.values(assign).filter((x, i, a) => a.indexOf(x) === i).join(" → ")}</p>
+        <div class="timer-actions">
+          ${doneToday
+            ? `<button class="btn primary" id="btn-workout-undo" style="min-width:150px">이 날짜 기록 취소</button>`
+            : isRest
+              ? `<button class="btn primary" id="btn-workout-rest" style="min-width:180px">휴식 완료</button>`
+              : `<button class="btn primary" id="btn-workout-done" style="min-width:200px">${isLast ? "운동 완료" : "다음 운동: " + nextPart}</button>`}
         </div>
       </div>
+      <p class="muted" style="padding:0 4px 12px">이번 주 ${doneCount}회 완료 · 요일별 배정은 설정에서 변경할 수 있습니다</p>
+    </div>
+    <div class="card">
+      <p class="card-title">요일별 배정</p>
+      ${store.WEEKDAYS.map((w, i) => `
+        <div class="row" style="min-height:44px">
+          <div class="row-main"><div class="row-title" style="font-size:15px">${w}</div></div>
+          <span class="chip ${assign[i] === "휴식" ? "" : "accent"}">${assign[i]}</span>
+        </div>`).join("")}
     </div>
     <div class="card">
       <p class="card-title">최근 기록</p>
@@ -565,32 +623,27 @@ function viewWorkout() {
   `;
 
   titleEl.textContent = "운동";
-  subEl.textContent = "5일 사이클로 균형 있게";
+  subEl.textContent = "요일별 사이클로 균형 있게";
 
   $("#btn-workout-done")?.addEventListener("click", () => {
-    const p = store.completeWorkout();
+    store.completeWorkout();
     render();
-    toast(`${p} 운동 완료!`);
   });
   $("#btn-workout-rest")?.addEventListener("click", () => {
     store.completeWorkout(true);
     render();
-    toast("예정된 휴식으로 기록했습니다");
   });
   $("#btn-workout-undo")?.addEventListener("click", () => {
+    if (key !== todayKey) { toast("기록 취소는 오늘 날짜만 가능합니다"); return; }
     if (store.undoWorkoutToday()) {
       render();
       toast("오늘의 운동 기록을 취소했습니다");
     }
   });
   $$("[data-wday]", viewEl).forEach((b) => b.addEventListener("click", () => {
-    const rec = store.workoutOn(b.dataset.wday);
-    toast(rec ? `${b.dataset.wday} · ${rec.part} ${rec.rest ? "(예정된 휴식)" : "완료"}` : `${b.dataset.wday} · 기록 없음`);
-  }));
-  $$("[data-setpart]", viewEl).forEach((b) => b.addEventListener("click", () => {
-    store.setWorkoutIndex(parseInt(b.dataset.setpart, 10));
+    if (b.dataset.wday === key) return;
+    selDay = b.dataset.wday === todayKey ? null : b.dataset.wday;
     render();
-    toast(`현재 단계를 ${store.todayWorkout()}로 설정했습니다`);
   }));
 }
 
@@ -715,7 +768,6 @@ function openScheduleEdit() {
           const time = $("#si-time", sheet2).value.trim();
           if (title) store.updateScheduleItem(it.id, { title, time: time || it.time, days });
           close2();
-          toast("일정 항목을 저장했습니다");
         });
         $("#si-del", sheet2).addEventListener("click", () => {
           store.deleteScheduleItem(it.id);
@@ -745,8 +797,7 @@ function openScheduleEdit() {
           if (title && days.length) {
             store.addScheduleItem({ title, time, days });
             close2();
-            toast("일정 항목을 추가했습니다");
-          }
+            }
         });
       });
     });
@@ -759,13 +810,34 @@ function viewSettings() {
 
   viewEl.innerHTML = `
     <div class="card">
-      <p class="card-title">화면</p>
+      <p class="card-title">화면 모드</p>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title">테마</div>
+          <div class="row-sub">라이트 / 다크 / 시스템 설정</div>
+        </div>
+        <div class="segment" style="margin:0;width:180px">
+          <button class="${st.theme === "system" ? "active" : ""}" id="th-system">시스템</button>
+          <button class="${st.theme === "light" ? "active" : ""}" id="th-light">라이트</button>
+          <button class="${st.theme === "dark" ? "active" : ""}" id="th-dark">다크</button>
+        </div>
+      </div>
       <div class="row">
         <div class="row-main">
           <div class="row-title">흑백 모드</div>
           <div class="row-sub">강조색을 제거하고 무채색 톤으로 표시합니다</div>
         </div>
         <button class="switch ${st.bw ? "on" : ""}" id="sw-bw" role="switch" aria-checked="${st.bw}"></button>
+      </div>
+    </div>
+    <div class="card">
+      <p class="card-title">알림</p>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title">일정 알림</div>
+          <div class="row-sub">오늘의 일정 시작 시각에 알림을 표시합니다 (앱 사용 중 · 홈 화면 앱 설치 필요)</div>
+        </div>
+        <button class="switch ${st.notify ? "on" : ""}" id="sw-notify" role="switch" aria-checked="${st.notify}"></button>
       </div>
     </div>
     <div class="card">
@@ -780,11 +852,16 @@ function viewSettings() {
       <div class="row">
         <div class="row-main">
           <div class="row-title">기본 학습 목표</div>
-          <div class="row-sub">평일 하루 강의 목표 (기본 ${s.goalBase}강)</div>
+          <div class="row-sub">평일 하루 강의 목표 · 현재 ${s.goalBase}강</div>
         </div>
-        <div class="stepper">
-          <button id="gb-minus">−</button><span class="val" id="gb-val">${s.goalBase}</span><button id="gb-plus">+</button>
+        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-goal">편집</button>
+      </div>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title">운동 요일 설정</div>
+          <div class="row-sub">요일별로 운동 종목 또는 휴식을 배정합니다</div>
         </div>
+        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-wassign">편집</button>
       </div>
     </div>
     <div class="card">
@@ -809,25 +886,92 @@ function viewSettings() {
   titleEl.textContent = "설정";
   subEl.textContent = "화면 · 일정 · 동기화";
 
+  ["system", "light", "dark"].forEach((mode) => {
+    $("#th-" + mode).addEventListener("click", () => {
+      st.theme = mode;
+      store.save();
+      applyTheme();
+      render();
+    });
+  });
+
   $("#sw-bw").addEventListener("click", () => {
     st.bw = !st.bw;
     store.save();
-    document.documentElement.classList.toggle("bw", st.bw);
+    applyTheme();
+    render();
+  });
+
+  $("#sw-notify").addEventListener("click", async () => {
+    if (!st.notify) {
+      if (!("Notification" in window)) { toast("이 브라우저는 알림을 지원하지 않습니다"); return; }
+      let perm = Notification.permission;
+      if (perm !== "granted") perm = await Notification.requestPermission();
+      if (perm !== "granted") { toast("알림 권한이 거부되었습니다. 설정에서 허용해주세요"); return; }
+      st.notify = true;
+    } else {
+      st.notify = false;
+    }
+    store.save();
+    scheduleNotifications();
     render();
   });
 
   $("#btn-sched").addEventListener("click", openScheduleEdit);
 
-  let gb = s.goalBase;
-  const updGb = () => { $("#gb-val").textContent = gb; };
-  $("#gb-minus").addEventListener("click", () => { gb = Math.max(0, gb - 1); store.setGoalBase(gb); updGb(); });
-  $("#gb-plus").addEventListener("click", () => { gb = Math.min(20, gb + 1); store.setGoalBase(gb); updGb(); });
+  $("#btn-goal").addEventListener("click", () => {
+    let gb = store.get().goalBase;
+    openSheet(`
+      <h2>기본 학습 목표</h2>
+      <p class="muted">평일 하루 학습할 강의 수를 설정합니다. 업무지시로 인한 당일 조정은 학습 탭에서 기록됩니다.</p>
+      <div class="field"><label>하루 강의 목표</label>
+        <div class="stepper" style="justify-content:center;padding:6px 0">
+          <button id="g2-minus">−</button><span class="val" id="g2-val">${gb}</span><button id="g2-plus">+</button>
+        </div>
+      </div>
+      <button class="btn primary block" id="g2-save">저장</button>
+    `, (sheet, close) => {
+      const upd = () => { $("#g2-val", sheet).textContent = gb; };
+      $("#g2-minus", sheet).addEventListener("click", () => { gb = Math.max(0, gb - 1); upd(); });
+      $("#g2-plus", sheet).addEventListener("click", () => { gb = Math.min(20, gb + 1); upd(); });
+      $("#g2-save", sheet).addEventListener("click", () => {
+        store.setGoalBase(gb);
+        close();
+      });
+    });
+  });
+
+  $("#btn-wassign").addEventListener("click", () => {
+    const assign = { ...store.workoutAssign() };
+    const parts = [...store.WORKOUT_CYCLE, "휴식"];
+    openSheet(`
+      <h2>운동 요일 설정</h2>
+      <p class="muted">각 요일에 배정할 종목을 선택하세요. '휴식'으로 배정한 날은 휴식 완료로 기록합니다.</p>
+      ${store.WEEKDAYS.map((w, i) => `
+        <div class="row">
+          <div class="row-main"><div class="row-title" style="font-size:15px">${w}</div></div>
+          <div class="segment" style="margin:0;width:250px">
+            ${parts.map((p) => `<button class="${assign[i] === p ? "active" : ""}" data-wa="${i}:${p}">${p}</button>`).join("")}
+          </div>
+        </div>`).join("")}
+      <button class="btn primary block" id="wa-save" style="margin-top:10px">저장</button>
+    `, (sheet, close) => {
+      $$("[data-wa]", sheet).forEach((b) => b.addEventListener("click", () => {
+        const [i, p] = b.dataset.wa.split(":");
+        assign[i] = p;
+        $$(`[data-wa^="${i}:"]`, sheet).forEach((x) => x.classList.toggle("active", x.dataset.wa === `${i}:${p}`));
+      }));
+      $("#wa-save", sheet).addEventListener("click", () => {
+        for (const [i, p] of Object.entries(assign)) store.setWorkoutAssign(+i, p);
+        close();
+      });
+    });
+  });
 
   $("#sw-caldav").addEventListener("click", () => {
     st.caldavEnabled = !st.caldavEnabled;
     store.save();
     render();
-    toast(st.caldavEnabled ? "CalDAV 동기화를 켰습니다" : "CalDAV 동기화를 껐습니다");
   });
 
   const persistFields = () => {
@@ -869,6 +1013,7 @@ export function render(scrollTop = false) {
   clearInterval(tickTimer);
   VIEWS[currentView]();
   $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === currentView));
+  renderPill();
   if (scrollTop) window.scrollTo({ top: 0 });
 }
 
@@ -878,7 +1023,8 @@ $$(".tab").forEach((t) => t.addEventListener("click", () => {
   render(true);
 }));
 
-if (store.get().settings.bw) document.documentElement.classList.add("bw");
+applyTheme();
+scheduleNotifications();
 render();
 
 if ("serviceWorker" in navigator) {

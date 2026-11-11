@@ -29,7 +29,7 @@ html.bw {
   --danger-rgb: 142, 142, 147;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.theme-light) {
     --bg: #000000;
     --bg-elevated: #1C1C1E;
     --bg-secondary: #2C2C2E;
@@ -38,7 +38,7 @@ html.bw {
     --fg-tertiary: #63636B;
     --sep: rgba(84, 84, 88, 0.4);
   }
-  html.bw {
+  html.bw:not(.theme-light) {
     --accent: #F2F2F7;
     --accent-pressed: #E5E5EA;
     --accent-rgb: 242, 242, 247;
@@ -47,6 +47,24 @@ html.bw {
     --danger: #AEAEB2;
     --danger-rgb: 174, 174, 178;
   }
+}
+html.theme-dark {
+  --bg: #000000;
+  --bg-elevated: #1C1C1E;
+  --bg-secondary: #2C2C2E;
+  --fg: #F5F5F7;
+  --fg-secondary: #9C9CA4;
+  --fg-tertiary: #63636B;
+  --sep: rgba(84, 84, 88, 0.4);
+}
+html.theme-dark.bw {
+  --accent: #F2F2F7;
+  --accent-pressed: #E5E5EA;
+  --accent-rgb: 242, 242, 247;
+  --success: #AEAEB2;
+  --success-rgb: 174, 174, 178;
+  --danger: #AEAEB2;
+  --danger-rgb: 174, 174, 178;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -77,7 +95,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   backdrop-filter: blur(20px) saturate(180%);
 }
@@ -367,6 +385,32 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 .switch.on { background: var(--success); }
 .switch.on::after { transform: translateX(20px); }
 
+/* ── Timer pill (floating) ──────────────── */
+.timer-pill {
+  position: fixed;
+  left: 16px; right: 16px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tab-h) + 12px);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-radius: 18px;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  animation: pillIn 0.4s var(--spring) both;
+  border: none;
+  font: inherit;
+  width: calc(100vw - 32px);
+}
+.timer-pill:active { transform: scale(0.97); }
+.timer-pill .pill-clock { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.timer-pill .pill-main { flex: 1; text-align: left; }
+.timer-pill .pill-label { font-size: 14px; font-weight: 700; }
+.timer-pill .pill-sub { font-size: 12px; opacity: 0.85; }
+@keyframes pillIn { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+
 /* ── Toast ─────────────────────────────── */
 #toast-root {
   position: fixed;
@@ -411,6 +455,8 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
   color: var(--fg-secondary);
 }
 .day-dot.today { background: var(--accent); color: #fff; }
+.day-dot.is-today { border: 2px solid var(--accent); }
+.day-dot.today.is-today { border-color: var(--bg-elevated); }
 .day-dot.done { background: rgba(var(--success-rgb), 0.18); color: var(--success); }
 .day-dot { border: none; font: inherit; width: 100%; transition: transform 0.15s var(--spring); }
 .day-dot:active { transform: scale(0.9); }

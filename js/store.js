@@ -31,9 +31,11 @@ function defaultState() {
     timer: null,           // { label, start }
     subjects: [],          // { id, name, chapters: [{ id, name, lectures: [{ id, name, status }] }] }
     goal: { daily: 10, adjustedToday: null, adjustLog: [] },
-    workout: { index: 0, history: [] }, // history: { date, part, done }
+    workout: { assign: { 1: "등", 2: "가슴", 3: "어깨", 4: "팔", 5: "하체", 0: "휴식", 6: "휴식" }, history: [] },
     settings: {
       bw: false,
+      theme: "system",
+      notify: false,
       caldavEnabled: false,
       caldavUrl: "https://caldav.icloud.com",
       caldavUser: "",
@@ -56,6 +58,9 @@ function load() {
     const st = { ...base, ...data, settings: { ...base.settings, ...(data.settings || {}) }, goal: { ...base.goal, ...(data.goal || {}) }, workout: { ...base.workout, ...(data.workout || {}) } };
     if (!Array.isArray(st.schedule) || !st.schedule.length) st.schedule = base.schedule;
     if (typeof st.goalBase !== "number") st.goalBase = 10;
+    if (!st.workout || typeof st.workout !== "object") st.workout = base.workout;
+    if (!st.workout.assign) st.workout.assign = base.workout.assign;
+    if (!Array.isArray(st.workout.history)) st.workout.history = [];
     return st;
   } catch {
     return defaultState();
@@ -330,18 +335,20 @@ export function setDailyGoal(n, reason = "") {
 }
 
 /* ── workout cycle ─────────────────────── */
-export function todayWorkout() {
-  return WORKOUT_CYCLE[state.workout.index % WORKOUT_CYCLE.length];
+export function todayWorkout(d = new Date()) {
+  return state.workout.assign[d.getDay()] || "휴식";
 }
 export function completeWorkout(rest = false) {
   const part = todayWorkout();
   state.workout.history.push({ date: dateKey(), part: rest ? "휴식" : part, done: true, rest });
-  state.workout.index = (state.workout.index + 1) % WORKOUT_CYCLE.length;
   save();
   return part;
 }
-export function setWorkoutIndex(i) {
-  state.workout.index = ((i % WORKOUT_CYCLE.length) + WORKOUT_CYCLE.length) % WORKOUT_CYCLE.length;
+export function workoutAssign() {
+  return state.workout.assign;
+}
+export function setWorkoutAssign(dow, part) {
+  state.workout.assign[dow] = part;
   save();
 }
 export function workoutDoneOn(key) {
@@ -352,7 +359,6 @@ export function undoWorkoutToday() {
   const idx = state.workout.history.findIndex((h) => h.date === key);
   if (idx === -1) return false;
   state.workout.history.splice(idx, 1);
-  state.workout.index = (state.workout.index - 1 + WORKOUT_CYCLE.length) % WORKOUT_CYCLE.length;
   save();
   return true;
 }
