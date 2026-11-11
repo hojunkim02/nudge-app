@@ -51,6 +51,7 @@ const nowHM = () => {
 let selDay = null;
 
 function viewToday() {
+  store.autoResolveLunch();
   const s = store.get();
   const todayKey = store.dateKey();
   const key = selDay || todayKey;
@@ -94,13 +95,6 @@ function viewToday() {
       <p class="muted">미확정 세션은 통계에 포함되지 않습니다.</p>
     </div>` : "";
 
-  const timerHtml = s.timer
-    ? `<p class="muted" style="padding:10px 4px">측정 중 — 하단의 ${esc(s.timer.label)} 바를 눌러 관리하세요</p>`
-    : `<div style="display:flex;gap:10px;padding:10px 0 14px">
-        <button class="btn primary block" id="btn-start">자습 시작</button>
-        <button class="btn block" id="btn-start-extra">추가 자습</button>
-      </div>`;
-
   const lunchHtml = (lunchCheck && isToday) ? `
     <div class="card">
       <p class="card-title">점심 자습 · 이번 주 예 ${lunchYes}/3</p>
@@ -120,20 +114,41 @@ function viewToday() {
       ${store.lunchAvailable() && !lunchDecided && nowHM() >= "11:50" ? `<p class="muted">11:50이 지나 '예' 선택이 마감되었습니다. 미응답은 '아니오'로 기록됩니다.</p>` : ""}
     </div>` : "";
 
+  const hmNow = nowHM();
+  let nowItem = null, nextItem = null;
+  if (isToday) {
+    const mins = hmNow.split(":").map(Number);
+    const cur = mins[0] * 60 + mins[1];
+    for (const c of checks) {
+      const m = c.time.match(/(\d{1,2}):(\d{2})/g);
+      if (!m || m.length < 2) continue;
+      const [sh, sm] = m[0].split(":").map(Number);
+      const [eh, em] = m[1].split(":").map(Number);
+      if (cur >= sh * 60 + sm && cur < eh * 60 + em) nowItem = c;
+      else if (cur < sh * 60 + sm && !nextItem) nextItem = c;
+    }
+  }
+
   viewEl.innerHTML = `
     <div class="card">
       <div class="week-strip">${strip}</div>
       <div class="hero">
+        <div>
+          <div style="font-size:16px;font-weight:700">${store.fmtDate(selDate)}${isToday ? "" : ' <span class="chip" style="margin-left:4px">열람</span>'}</div>
+          ${isToday ? `<p class="muted" style="padding:4px 0 0">지금: ${nowItem ? esc(nowItem.title) : "일정 없음"}${nextItem ? ` · 다음: ${esc(nextItem.title)}` : ""}</p>` : ""}
+          <p class="muted" style="padding:2px 0 0">자습 ${fmtMin(todayMin)}</p>
+          ${isToday && !s.timer ? `
+          <div style="display:flex;gap:8px;padding:10px 0 0">
+            <button class="btn primary" style="min-height:42px;padding:0 18px;font-size:14px" id="btn-start">자습 시작</button>
+            <button class="btn" style="min-height:42px;padding:0 18px;font-size:14px" id="btn-start-extra">추가 자습</button>
+          </div>` : ""}
+        </div>
         <div class="ring">
           <svg width="108" height="108" viewBox="0 0 108 108">
             <circle class="track" cx="54" cy="54" r="47"></circle>
             <circle class="fill" cx="54" cy="54" r="47" stroke-dasharray="295.3" stroke-dashoffset="${295.3 * (1 - pct / 100)}"></circle>
           </svg>
           <div class="ring-label"><div>${pct}%<small>${doneCount}/${checks.length} 완료</small></div></div>
-        </div>
-        <div>
-          <div style="font-size:16px;font-weight:700">${store.fmtDate(selDate)}${isToday ? "" : ' <span class="chip" style="margin-left:4px">열람</span>'}</div>
-          <p class="muted" style="padding:4px 0 0">자습 ${fmtMin(todayMin)}</p>
         </div>
       </div>
     </div>
@@ -151,8 +166,6 @@ function viewToday() {
     </div>
     ${lunchHtml}
     ${isToday ? pendingHtml : ""}
-    ${isToday ? `<div class="card"><p class="card-title">자습 타이머</p>${timerHtml}</div>` : ""}
-    ${isToday ? `<div style="height:76px"></div>` : ""}
   `;
 
   titleEl.textContent = "오늘";
@@ -323,13 +336,14 @@ function scheduleNotifications() {
   }
 }
 
-/* ═════════ VIEW: STUDY ═════════ */
+/* ═════════ VIEW: STUDY (Things 3 style) ═════════ */
+const expanded = { subject: null, chapter: null };
+
 function viewStudy() {
   const s = store.get();
   const stats = store.lectureStats();
   const pct = stats.total ? Math.round((stats.done / stats.total) * 100) : 0;
   const todayGoal = s.goal.daily;
-
   const STATUS_CHIP = { "미학습": "", "복습 필요": "red", "완료": "green" };
   const origGoal = s.goalBase;
   const doneToday = store.lecturesDoneOn(store.dateKey());
@@ -356,12 +370,11 @@ function viewStudy() {
     </div>
     <div class="card">
       <p class="card-title">과목 · 강의</p>
-      <div id="subject-list">
-        ${s.subjects.length ? s.subjects.map((sub) => subjectHtml(sub)).join("") : `<p class="muted">아직 과목이 없습니다. 아래에서 추가하세요.</p>`}
+      <div style="display:flex;gap:8px;padding:8px 0;margin:0 0 4px">
+        <input type="text" id="qa-subject" placeholder="새 과목 추가…" style="min-height:44px">
+        <button class="btn primary" id="qa-subject-add" style="min-height:44px;min-width:52px;font-size:20px">+</button>
       </div>
-      <div style="display:flex;gap:10px;padding:10px 0 12px">
-        <button class="btn block" id="btn-add-subject">과목 추가</button>
-      </div>
+      ${s.subjects.length ? s.subjects.map((sub) => subjectHtml(sub)).join("") : `<p class="muted">위 입력란에 과목명을 적고 + 를 누르세요.</p>`}
     </div>
     ${s.goal.adjustLog.length ? `
     <div class="card">
@@ -378,39 +391,103 @@ function viewStudy() {
   subEl.textContent = "강의 진도와 목표를 관리합니다";
 
   function subjectHtml(sub) {
+    const open = expanded.subject === sub.id;
+    const lecCount = sub.chapters.reduce((a, c) => a + c.lectures.length, 0);
+    const doneCount = sub.chapters.reduce((a, c) => a + c.lectures.filter((l) => l.status === "완료").length, 0);
     return `
-      <div class="row" data-subject="${sub.id}">
+      <div class="row" style="min-height:56px">
+        <button class="disc" data-expand-subject="${sub.id}" aria-label="${esc(sub.name)} 열기">${open ? "▾" : "▸"}</button>
         <div class="row-main">
           <div class="row-title">${esc(sub.name)}</div>
-          <div class="row-sub">${sub.chapters.reduce((a, c) => a + c.lectures.length, 0)}강</div>
+          <div class="row-sub">${doneCount}/${lecCount}강 완료</div>
+          <div class="bar" style="margin-top:6px;height:5px"><i style="width:${lecCount ? Math.round(doneCount / lecCount * 100) : 0}%"></i></div>
         </div>
         <button class="btn" style="min-height:38px;padding:0 12px;font-size:15px" data-edit-subject="${sub.id}">⋯</button>
-        <button class="btn" style="min-height:38px;padding:0 14px;font-size:14px" data-add-chapter="${sub.id}">챕터 +</button>
       </div>
-      ${sub.chapters.map((ch) => `
-        <div style="padding-left:14px">
-          <div class="row">
-            <div class="row-main"><div class="row-title" style="font-size:14px">${esc(ch.name)}</div></div>
-            <button class="btn" style="min-height:34px;padding:0 10px;font-size:14px" data-edit-chapter="${ch.id}">⋯</button>
-            <button class="btn" style="min-height:34px;padding:0 12px;font-size:13px" data-add-lecture="${ch.id}">강의 +</button>
-          </div>
-          ${ch.lectures.map((l) => `
-            <div class="row" style="min-height:44px">
-              <button class="check ${l.status === "완료" ? "on" : ""}" style="${l.status === "완료" ? "background:var(--success);border-color:var(--success);color:#fff" : ""}" data-cycle="${l.id}">${CHECK_SVG}</button>
-              <div class="row-main">
-                <div class="row-title" style="font-size:14px;${l.status === "완료" ? "color:var(--fg-secondary);text-decoration:line-through" : ""}">${esc(l.name)}</div>
-              </div>
-              <button class="btn" style="min-height:32px;padding:0 10px;font-size:14px;color:var(--fg-secondary)" data-edit-lecture="${l.id}">⋯</button>
-              <button class="chip ${STATUS_CHIP[l.status]}" data-cycle="${l.id}" style="border:none">${esc(l.status)}</button>
-            </div>`).join("")}
-        </div>`).join("")}`;
+      ${open ? sub.chapters.map((ch) => chapterHtml(sub, ch)).join("") + `
+      <div style="display:flex;gap:8px;padding:8px 0 8px 34px">
+        <input type="text" id="qa-chapter-${sub.id}" placeholder="새 챕터 추가…" style="min-height:40px">
+        <button class="btn" data-qa-chapter-add="${sub.id}" style="min-height:40px;min-width:48px;font-size:18px">+</button>
+      </div>` : ""}`;
   }
 
+  function chapterHtml(sub, ch) {
+    const open = expanded.chapter === ch.id;
+    return `
+      <div style="padding-left:34px">
+        <div class="row" style="min-height:48px">
+          <button class="disc" data-expand-chapter="${ch.id}">${open ? "▾" : "▸"}</button>
+          <div class="row-main"><div class="row-title" style="font-size:15px">${esc(ch.name)}</div>
+            <div class="row-sub">${ch.lectures.length}강</div>
+          </div>
+          <button class="btn" style="min-height:34px;padding:0 10px;font-size:14px" data-edit-chapter="${ch.id}">⋯</button>
+        </div>
+        ${open ? ch.lectures.map((l) => `
+          <div class="row" style="min-height:44px;padding-left:26px">
+            <button class="check ${l.status === "완료" ? "on" : ""}" style="${l.status === "완료" ? "background:var(--success);border-color:var(--success);color:#fff" : ""}" data-cycle="${l.id}">${CHECK_SVG}</button>
+            <div class="row-main">
+              <div class="row-title" style="font-size:14px;${l.status === "완료" ? "color:var(--fg-secondary);text-decoration:line-through" : ""}">${esc(l.name)}</div>
+            </div>
+            <button class="btn" style="min-height:32px;padding:0 10px;font-size:14px;color:var(--fg-secondary)" data-edit-lecture="${l.id}">⋯</button>
+            <button class="chip ${STATUS_CHIP[l.status]}" data-cycle="${l.id}" style="border:none">${esc(l.status)}</button>
+          </div>`).join("") + `
+          <div style="display:flex;gap:8px;padding:8px 0 8px 26px">
+            <input type="text" id="qa-lecture-${ch.id}" placeholder="새 강의 추가…" style="min-height:40px">
+            <button class="btn" data-qa-lecture-add="${ch.id}" style="min-height:40px;min-width:48px;font-size:18px">+</button>
+          </div>` : ""}
+      </div>`;
+  }
+
+  // quick add (Things 3 style inline)
+  const addSubjectInline = () => {
+    const el = $("#qa-subject", viewEl);
+    const v = el.value.trim();
+    if (!v) return;
+    store.addSubject(v);
+    expanded.subject = store.get().subjects.at(-1).id;
+    render();
+  };
+  $("#qa-subject-add", viewEl).addEventListener("click", addSubjectInline);
+  $("#qa-subject", viewEl).addEventListener("keydown", (e) => { if (e.key === "Enter") addSubjectInline(); });
+
+  $$("[data-qa-chapter-add]", viewEl).forEach((b) => b.addEventListener("click", () => {
+    const el = $(`#qa-chapter-${b.dataset.qaChapterAdd}`, viewEl);
+    const v = el.value.trim();
+    if (!v) return;
+    store.addChapter(b.dataset.qaChapterAdd, v);
+    render();
+  }));
+  $$("[data-qa-lecture-add]", viewEl).forEach((b) => b.addEventListener("click", () => {
+    const el = $(`#qa-lecture-${b.dataset.qaLectureAdd}`, viewEl);
+    const v = el.value.trim();
+    if (!v) return;
+    store.addLecture(b.dataset.qaLectureAdd, v);
+    render();
+  }));
+  $$("input[id^='qa-chapter-']", viewEl).forEach((el) => el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $(`[data-qa-chapter-add="${el.id.replace("qa-chapter-", "")}"]`, viewEl)?.click();
+  }));
+  $$("input[id^='qa-lecture-']", viewEl).forEach((el) => el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $(`[data-qa-lecture-add="${el.id.replace("qa-lecture-", "")}"]`, viewEl)?.click();
+  }));
+
+  // accordion
+  $$("[data-expand-subject]", viewEl).forEach((b) => b.addEventListener("click", () => {
+    expanded.subject = expanded.subject === b.dataset.expandSubject ? null : b.dataset.expandSubject;
+    if (expanded.subject !== b.dataset.expandSubject) expanded.chapter = null;
+    render();
+  }));
+  $$("[data-expand-chapter]", viewEl).forEach((b) => b.addEventListener("click", () => {
+    expanded.chapter = expanded.chapter === b.dataset.expandChapter ? null : b.dataset.expandChapter;
+    render();
+  }));
+
+  // cycle status
   $$("[data-cycle]", viewEl).forEach((b) => b.addEventListener("click", () => {
     const st = store.cycleLecture(b.dataset.cycle);
     if (st === "완료") {
       const name = findLectureName(b.dataset.cycle);
-      store.logLectureDone(name);
+      store.logLectureDone(b.dataset.cycle, name);
     }
     render();
   }));
@@ -420,6 +497,7 @@ function viewStudy() {
     return "";
   }
 
+  // edit sheets (rename/delete)
   $$("[data-edit-subject]", viewEl).forEach((b) => b.addEventListener("click", () => {
     const sub = s.subjects.find((x) => x.id === b.dataset.editSubject);
     openSheet(`
@@ -487,55 +565,7 @@ function viewStudy() {
     });
   }));
 
-  $("#btn-add-subject").addEventListener("click", () => {
-    openSheet(`
-      <h2>과목 추가</h2>
-      <div class="field"><label>과목명</label><input type="text" id="subj-name" placeholder="예: 재무회계론"></div>
-      <button class="btn primary block" id="btn-save-subj">추가</button>
-    `, (sheet, close) => {
-      $("#btn-save-subj", sheet).addEventListener("click", () => {
-        const v = $("#subj-name", sheet).value.trim();
-        if (!v) return;
-        store.addSubject(v);
-        close(); render();
-      });
-    });
-  });
-
-  $$("[data-add-chapter]").forEach((b) => b.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const sid = b.dataset.addChapter;
-    openSheet(`
-      <h2>챕터 추가</h2>
-      <div class="field"><label>챕터명</label><input type="text" id="ch-name" placeholder="예: 제3장"></div>
-      <button class="btn primary block" id="btn-save-ch">추가</button>
-    `, (sheet, close) => {
-      $("#btn-save-ch", sheet).addEventListener("click", () => {
-        const v = $("#ch-name", sheet).value.trim();
-        if (!v) return;
-        store.addChapter(sid, v);
-        close(); render();
-      });
-    });
-  }));
-
-  $$("[data-add-lecture]").forEach((b) => b.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const cid = b.dataset.addLecture;
-    openSheet(`
-      <h2>강의 추가</h2>
-      <div class="field"><label>강의명</label><input type="text" id="lec-name" placeholder="예: 1강 매매목적 부동산"></div>
-      <button class="btn primary block" id="btn-save-lec">추가</button>
-    `, (sheet, close) => {
-      $("#btn-save-lec", sheet).addEventListener("click", () => {
-        const v = $("#lec-name", sheet).value.trim();
-        if (!v) return;
-        store.addLecture(cid, v);
-        close(); render();
-      });
-    });
-  }));
-
+  // goal adjust
   $("#btn-adjust").addEventListener("click", () => {
     openSheet(`
       <h2>목표 조정</h2>
@@ -577,8 +607,13 @@ function viewWorkout() {
   });
   const doneCount = weekDone.filter(Boolean).length;
   const isRest = part === "휴식";
-  const nextPart = store.WORKOUT_CYCLE[(store.WORKOUT_CYCLE.indexOf(part) + 1) % 5];
-  const isLast = part === "하체";
+  const selDow = selDate.getDay();
+  const restDays = Object.entries(assign).filter(([, p]) => p === "휴식").map(([d]) => +d);
+  const activeDows = store.WEEKDAYS.map((_, i) => i).filter((d) => !restDays.includes(d));
+  const pos = activeDows.indexOf(selDow);
+  const nextDow = pos >= 0 && pos < activeDows.length - 1 ? activeDows[pos + 1] : null;
+  const nextPart = nextDow != null ? assign[nextDow] : null;
+  const isLast = nextDow == null;
 
   viewEl.innerHTML = `
     <div class="card">
@@ -714,7 +749,27 @@ function viewStats() {
           <span>정규 자습 목표</span><span>${Math.min(100, Math.round(weekMin / goalMin * 100))}%</span>
         </div>
         <div class="bar green"><i style="width:${Math.min(100, Math.round(weekMin / goalMin * 100))}%"></i></div>
+        ${(() => {
+          const r = Math.round(weekMin / goalMin * 100);
+          const succMin = store.get().settings.successMin;
+          const label = r >= 100 ? '<span class="chip green">완전 수행</span>' : r >= succMin ? '<span class="chip accent">성공</span>' : '<span class="chip red">미달</span>';
+          return `<p class="muted" style="padding:8px 0 0">판정: ${label} (성공 기준 ${succMin}%)</p>`;
+        })()}
       </div>
+    </div>
+    <div class="card">
+      <p class="card-title">과목별 진행률</p>
+      ${store.get().subjects.map((sub) => {
+        const total = sub.chapters.reduce((a, c) => a + c.lectures.length, 0);
+        const done = sub.chapters.reduce((a, c) => a + c.lectures.filter((l) => l.status === "완료").length, 0);
+        const p = total ? Math.round(done / total * 100) : 0;
+        return `<div style="padding:10px 0">
+          <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;margin-bottom:6px">
+            <span>${esc(sub.name)}</span><span style="color:var(--fg-secondary)">${done}/${total}</span>
+          </div>
+          <div class="bar"><i style="width:${p}%"></i></div>
+        </div>`;
+      }).join("") || `<p class="muted">과목을 추가하면 여기에 표시됩니다.</p>`}
     </div>
   `;
 
@@ -859,9 +914,16 @@ function viewSettings() {
       <div class="row">
         <div class="row-main">
           <div class="row-title">운동 요일 설정</div>
-          <div class="row-sub">요일별로 운동 종목 또는 휴식을 배정합니다</div>
+          <div class="row-sub">추천 루틴 프리셋 + 요일별 종목 배정</div>
         </div>
         <button class="btn" style="min-height:40px;padding:0 16px" id="btn-wassign">편집</button>
+      </div>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title">자습 성공 기준</div>
+          <div class="row-sub">주간 달성률 기준 · 현재 ${st.successMin}%</div>
+        </div>
+        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-succ">편집</button>
       </div>
     </div>
     <div class="card">
@@ -941,27 +1003,62 @@ function viewSettings() {
     });
   });
 
+  $("#btn-succ").addEventListener("click", () => {
+    let sv = store.get().settings.successMin;
+    openSheet(`
+      <h2>자습 성공 기준</h2>
+      <p class="muted">주간 자습 달성률이 이 값 이상이면 '성공', 100%는 '완전 수행'으로 별도 표시됩니다. 60~100% 범위에서 설정하세요.</p>
+      <div class="field"><label>성공 기준 (%)</label>
+        <div class="stepper" style="justify-content:center;padding:6px 0">
+          <button id="sv-minus">−</button><span class="val" id="sv-val">${sv}</span><button id="sv-plus">+</button>
+        </div>
+      </div>
+      <button class="btn primary block" id="sv-save">저장</button>
+    `, (sheet, close) => {
+      const upd = () => { $("#sv-val", sheet).textContent = sv; };
+      $("#sv-minus", sheet).addEventListener("click", () => { sv = Math.max(60, sv - 5); upd(); });
+      $("#sv-plus", sheet).addEventListener("click", () => { sv = Math.min(100, sv + 5); upd(); });
+      $("#sv-save", sheet).addEventListener("click", () => {
+        store.get().settings.successMin = sv;
+        store.save();
+        close();
+      });
+    });
+  });
+
   $("#btn-wassign").addEventListener("click", () => {
     const assign = { ...store.workoutAssign() };
-    const parts = [...store.WORKOUT_CYCLE, "휴식"];
     openSheet(`
       <h2>운동 요일 설정</h2>
-      <p class="muted">각 요일에 배정할 종목을 선택하세요. '휴식'으로 배정한 날은 휴식 완료로 기록합니다.</p>
+      <p class="muted">추천 루틴을 골라 적용하거나, 각 요일을 직접 선택할 수 있습니다. '휴식'으로 배정한 날은 휴식 완료로 기록합니다.</p>
+      ${store.WORKOUT_PRESETS.map((p, i) => `
+        <div class="row">
+          <div class="row-main">
+            <div class="row-title" style="font-size:15px">${p.name}</div>
+            <div class="row-sub">${p.desc}</div>
+          </div>
+          <button class="btn" style="min-height:38px;padding:0 14px;font-size:14px" data-wpreset="${i}">적용</button>
+        </div>`).join("")}
+      <p class="card-title" style="padding-top:14px">요일별 직접 설정</p>
       ${store.WEEKDAYS.map((w, i) => `
         <div class="row">
-          <div class="row-main"><div class="row-title" style="font-size:15px">${w}</div></div>
-          <div class="segment" style="margin:0;width:250px">
-            ${parts.map((p) => `<button class="${assign[i] === p ? "active" : ""}" data-wa="${i}:${p}">${p}</button>`).join("")}
-          </div>
+          <div class="row-main"><div class="row-title" style="font-size:15px">${w}</div><div class="row-sub" id="wa-cur-${i}">${assign[i]}</div></div>
+          <select id="wa-sel-${i}" style="width:140px;min-height:40px">
+            ${store.WORKOUT_PARTS.map((p) => `<option value="${p}" ${assign[i] === p ? "selected" : ""}>${p}</option>`).join("")}
+          </select>
         </div>`).join("")}
       <button class="btn primary block" id="wa-save" style="margin-top:10px">저장</button>
     `, (sheet, close) => {
-      $$("[data-wa]", sheet).forEach((b) => b.addEventListener("click", () => {
-        const [i, p] = b.dataset.wa.split(":");
-        assign[i] = p;
-        $$(`[data-wa^="${i}:"]`, sheet).forEach((x) => x.classList.toggle("active", x.dataset.wa === `${i}:${p}`));
+      $$("[data-wpreset]", sheet).forEach((b) => b.addEventListener("click", () => {
+        const preset = store.WORKOUT_PRESETS[+b.dataset.wpreset];
+        Object.assign(assign, preset.assign);
+        store.WEEKDAYS.forEach((_, i) => {
+          $("#wa-sel-" + i, sheet).value = assign[i];
+          $("#wa-cur-" + i, sheet).textContent = assign[i];
+        });
       }));
       $("#wa-save", sheet).addEventListener("click", () => {
+        store.WEEKDAYS.forEach((_, i) => { assign[i] = $("#wa-sel-" + i, sheet).value; });
         for (const [i, p] of Object.entries(assign)) store.setWorkoutAssign(+i, p);
         close();
       });
@@ -1024,6 +1121,7 @@ $$(".tab").forEach((t) => t.addEventListener("click", () => {
 }));
 
 applyTheme();
+store.autoResolveLunch();
 scheduleNotifications();
 render();
 

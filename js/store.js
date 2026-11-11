@@ -18,6 +18,13 @@ export const DEFAULT_SCHEDULE = [
 ];
 
 export const WORKOUT_CYCLE = ["등", "가슴", "어깨", "팔", "하체"];
+export const WORKOUT_PARTS = ["등", "가슴", "어깨", "팔", "하체", "상체", "하체·코어", "밀기", "당기기", "전신", "휴식"];
+export const WORKOUT_PRESETS = [
+  { name: "부위별 5분할", desc: "등·가슴·어깨·팔·하체 각 1회 — 세트 여유 있는 중급자", assign: { 1: "등", 2: "가슴", 3: "어깨", 4: "팔", 5: "하체", 0: "휴식", 6: "휴식" } },
+  { name: "PPL + 상하체", desc: "밀기·당기기·하체 + 상체·하체(하이브리드) — 회복·빈도 균형 추천", assign: { 1: "밀기", 2: "당기기", 3: "하체", 4: "상체", 5: "하체·코어", 0: "휴식", 6: "휴식" } },
+  { name: "상하 2분할", desc: "상체/하체 교대 — 바쁜 초중급자에게 가장 효율적", assign: { 1: "상체", 2: "하체", 3: "휴식", 4: "상체", 5: "하체", 6: "휴식", 0: "휴식" } },
+  { name: "풀바디 3일", desc: "전신 루틴 주 3회 — 초보자·시간 부족 시 최적", assign: { 1: "전신", 2: "휴식", 3: "전신", 4: "휴식", 5: "전신", 6: "휴식", 0: "휴식" } }
+];
 
 function defaultState() {
   return {
@@ -36,6 +43,7 @@ function defaultState() {
       bw: false,
       theme: "system",
       notify: false,
+      successMin: 80,
       caldavEnabled: false,
       caldavUrl: "https://caldav.icloud.com",
       caldavUser: "",
@@ -146,6 +154,16 @@ export function resetDay(key) {
 }
 
 /* ── lunch decision (max 3 "yes" per Mon–Fri week) ── */
+export function autoResolveLunch() {
+  const now = new Date();
+  const dow = now.getDay();
+  if (dow < 1 || dow > 5) return;
+  const key = dateKey(now);
+  if (state.lunch[key] !== undefined) return;
+  const hm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  if (hm >= "11:50") state.lunch[key] = "no";
+  save();
+}
 export function lunchThisWeek() {
   const start = startOfWeek();
   let n = 0;
@@ -305,7 +323,9 @@ export function cycleLecture(lectureId) {
     for (const c of s.chapters)
       for (const l of c.lectures)
         if (l.id === lectureId) {
+          const prev = l.status;
           l.status = order[(order.indexOf(l.status) + 1) % order.length];
+          state.logs.push({ type: "lecture-status", date: dateKey(), lectureId, name: l.name, from: prev, to: l.status, at: Date.now() });
           save();
           return l.status;
         }
@@ -321,11 +341,15 @@ export function lectureStats() {
   return { total, done };
 }
 export function lecturesDoneOn(key) {
-  return (state.logs.filter((e) => e.type === "lecture-done" && e.date === key)).length;
+  const ids = new Set(state.logs.filter((e) => e.type === "lecture-done" && e.date === key).map((e) => e.lectureId));
+  return ids.size;
 }
-export function logLectureDone(name) {
-  state.logs.push({ type: "lecture-done", date: dateKey(), name, at: Date.now() });
-  save();
+export function logLectureDone(id, name) {
+  const dup = state.logs.some((e) => e.type === "lecture-done" && e.date === dateKey() && e.lectureId === id);
+  if (!dup) {
+    state.logs.push({ type: "lecture-done", date: dateKey(), lectureId: id, name, at: Date.now() });
+    save();
+  }
 }
 export function setDailyGoal(n, reason = "") {
   const prev = state.goal.daily;

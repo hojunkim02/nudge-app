@@ -471,3 +471,12 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 }
 .stepper button:active { transform: scale(0.9); }
 .stepper .val { font-size: 18px; font-weight: 700; min-width: 30px; text-align: center; }
+.disc {
+  width: 30px; height: 30px;
+  border: none; background: none;
+  color: var(--fg-tertiary);
+  font-size: 15px;
+  flex: none;
+  transition: transform 0.2s var(--spring);
+}
+.disc:active { transform: scale(0.8); }
