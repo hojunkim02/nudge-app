@@ -1,4 +1,4 @@
-const CACHE = "nudge-v2";
+const CACHE = "nudge-v3";
 const ASSETS = [
   "./",
   "./index.html",
@@ -30,6 +30,8 @@ self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin) return;
+  // App shell (HTML/CSS/JS): network-first so updates always win when online.
+  const isShell = /\.(html|css|js)(\?|$)/.test(url.pathname) || url.pathname.endsWith("/") || url.pathname.endsWith("index.html");
   e.respondWith(
     caches.match(e.request).then((hit) => {
       const net = fetch(e.request).then((res) => {
@@ -39,7 +41,7 @@ self.addEventListener("fetch", (e) => {
         }
         return res;
       }).catch(() => hit);
-      return hit || net;
+      return isShell ? net : (hit || net);
     })
   );
 });
