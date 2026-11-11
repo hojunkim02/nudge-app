@@ -95,9 +95,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: color-mix(in srgb, var(--bg) 94%, transparent);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
+  background: var(--bg);
 }
 .app-header h1 {
   font-size: 28px;
@@ -319,6 +317,22 @@ button {
 .tab:active { transform: scale(0.92); }
 .tab.active { color: var(--accent); }
 .tab-icon { width: 26px; height: 26px; }
+.tab.active .tab-icon { animation: tabPop 0.32s var(--spring); }
+@keyframes tabPop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+@keyframes checkPop {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.18); }
+  100% { transform: scale(1.05); }
+}
+.row.done .check { animation: checkPop 0.3s var(--spring); }
+.btn, .chip, .disc, .day-dot, .stepper button, select { transition: transform 0.18s var(--spring), opacity 0.18s; }
+.btn:active { transform: scale(0.94); }
+.chip:active { transform: scale(0.94); opacity: 0.8; }
+select:active { transform: scale(0.97); }
 
 /* ── Sheet (bottom modal) ──────────────── */
 .sheet-backdrop {
@@ -385,31 +399,32 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 .switch.on { background: var(--success); }
 .switch.on::after { transform: translateX(20px); }
 
-/* ── Timer pill (floating) ──────────────── */
-.timer-pill {
-  position: fixed;
-  left: 16px; right: 16px;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tab-h) + 12px);
-  z-index: 30;
+/* ── Swipe-to-delete ────────────────────── */
+.swipe-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  margin: 2px 0;
+}
+.swipe-wrap::before {
+  content: "삭제";
+  position: absolute;
+  inset: 0;
+  background: var(--danger);
+  color: #fff;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 18px;
-  border-radius: 18px;
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-  animation: pillIn 0.4s var(--spring) both;
-  border: none;
-  font: inherit;
-  width: calc(100vw - 32px);
+  justify-content: flex-end;
+  padding-right: 22px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 12px;
 }
-.timer-pill:active { transform: scale(0.97); }
-.timer-pill .pill-clock { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.timer-pill .pill-main { flex: 1; text-align: left; }
-.timer-pill .pill-label { font-size: 14px; font-weight: 700; }
-.timer-pill .pill-sub { font-size: 12px; opacity: 0.85; }
-@keyframes pillIn { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+.swipe-wrap > .row {
+  position: relative;
+  background: var(--bg-elevated);
+  transition: transform 0.28s var(--spring), opacity 0.2s;
+}
 
 /* ── Toast ─────────────────────────────── */
 #toast-root {

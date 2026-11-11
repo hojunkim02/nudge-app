@@ -17,8 +17,20 @@ export const DEFAULT_SCHEDULE = [
   { id: "rest", title: "휴식", time: "하루 종일", days: [6] },
 ];
 
-export const WORKOUT_CYCLE = ["등", "가슴", "어깨", "팔", "하체"];
 export const WORKOUT_PARTS = ["등", "가슴", "어깨", "팔", "하체", "상체", "하체·코어", "밀기", "당기기", "전신", "휴식"];
+export const DEFAULT_ROUTINES = {
+  "등": ["풀업", "랫풀다운", "시티드 케이블 로우", "바벨 로우"],
+  "가슴": ["벤치프레스", "인클라인 덤벨 프레스", "케이블 체스트 프레스", "딥스"],
+  "어깨": ["오버헤드 프레스", "덤벨 숄더 프레스", "레터럴 레이즈", "페이스 풀"],
+  "팔": ["바벨 컬", "해머 컬", "트라이셉스 푸시다운", "킥백"],
+  "하체": ["스쿼트", "레그 프레스", "런지", "레그 컬"],
+  "상체": ["벤치프레스", "바벨 로우", "오버헤드 프레스", "렛풀다운"],
+  "하체·코어": ["스쿼트", "레그 컬", "레그 레이즈", "플랭크"],
+  "밀기": ["벤치프레스", "오버헤드 프레스", "딥스", "레터럴 레이즈"],
+  "당기기": ["풀업", "랫풀다운", "바벨 로우", "바벨 컬"],
+  "전신": ["스쿼트", "벤치프레스", "바벨 로우", "버피"],
+  "휴식": []
+};
 export const WORKOUT_PRESETS = [
   { name: "부위별 5분할", desc: "등·가슴·어깨·팔·하체 각 1회 — 세트 여유 있는 중급자", assign: { 1: "등", 2: "가슴", 3: "어깨", 4: "팔", 5: "하체", 0: "휴식", 6: "휴식" } },
   { name: "PPL + 상하체", desc: "밀기·당기기·하체 + 상체·하체(하이브리드) — 회복·빈도 균형 추천", assign: { 1: "밀기", 2: "당기기", 3: "하체", 4: "상체", 5: "하체·코어", 0: "휴식", 6: "휴식" } },
@@ -38,7 +50,12 @@ function defaultState() {
     timer: null,           // { label, start }
     subjects: [],          // { id, name, chapters: [{ id, name, lectures: [{ id, name, status }] }] }
     goal: { daily: 10, adjustedToday: null, adjustLog: [] },
-    workout: { assign: { 1: "등", 2: "가슴", 3: "어깨", 4: "팔", 5: "하체", 0: "휴식", 6: "휴식" }, history: [] },
+    workout: {
+      assign: { 1: "등", 2: "가슴", 3: "어깨", 4: "팔", 5: "하체", 0: "휴식", 6: "휴식" },
+      routines: JSON.parse(JSON.stringify(DEFAULT_ROUTINES)),
+      progress: { date: null, done: 0 },
+      history: []
+    },
     settings: {
       bw: false,
       theme: "system",
@@ -68,6 +85,8 @@ function load() {
     if (typeof st.goalBase !== "number") st.goalBase = 10;
     if (!st.workout || typeof st.workout !== "object") st.workout = base.workout;
     if (!st.workout.assign) st.workout.assign = base.workout.assign;
+    if (!st.workout.routines || typeof st.workout.routines !== "object") st.workout.routines = base.workout.routines;
+    if (!st.workout.progress) st.workout.progress = { date: null, done: 0 };
     if (!Array.isArray(st.workout.history)) st.workout.history = [];
     return st;
   } catch {
@@ -365,11 +384,46 @@ export function todayWorkout(d = new Date()) {
 export function completeWorkout(rest = false) {
   const part = todayWorkout();
   state.workout.history.push({ date: dateKey(), part: rest ? "휴식" : part, done: true, rest });
+  state.workout.progress = { date: null, done: 0 };
   save();
   return part;
 }
 export function workoutAssign() {
   return state.workout.assign;
+}
+export function workoutRoutine(part) {
+  return state.workout.routines[part] || [];
+}
+export function setRoutineItem(part, idx, name) {
+  const r = state.workout.routines[part];
+  if (!r) return;
+  if (name === null) r.splice(idx, 1);
+  else if (idx === -1) r.push(name);
+  else r[idx] = name;
+  save();
+}
+export function routineDoneToday() {
+  const p = state.workout.progress;
+  const today = dateKey();
+  if (p.date !== today) { p.date = today; p.done = 0; }
+  return p.done;
+}
+export function advanceRoutine() {
+  const part = todayWorkout();
+  const list = workoutRoutine(part);
+  const done = routineDoneToday();
+  if (done >= list.length - 1) {
+    state.workout.progress = { date: null, done: 0 };
+    completeWorkout();
+    return { finished: true };
+  }
+  state.workout.progress.done = done + 1;
+  save();
+  return { finished: false, next: list[done + 1] };
+}
+export function undoRoutineStep() {
+  const p = state.workout.progress;
+  if (p.date === dateKey() && p.done > 0) { p.done--; save(); }
 }
 export function setWorkoutAssign(dow, part) {
   state.workout.assign[dow] = part;
@@ -391,17 +445,3 @@ export function workoutOn(key) {
 }
 
 /* ── backup / restore ──────────────────── */
-export function exportJSON() {
-  return JSON.stringify({ ...state, exported: new Date().toISOString() }, null, 2);
-}
-export function importJSON(text) {
-  const data = JSON.parse(text);
-  if (typeof data !== "object" || !Array.isArray(data.subjects) || typeof data.settings !== "object") {
-    throw new Error("유효하지 않은 Nudge 백업 파일입니다.");
-  }
-  const backup = localStorage.getItem(KEY) || "";
-  localStorage.setItem(KEY + ".backup", backup);
-  state = { ...defaultState(), ...data };
-  save();
-  return true;
-}

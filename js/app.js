@@ -25,22 +25,65 @@ export function toast(msg, ms = 2600) {
   }, ms);
 }
 
-/* ── sheet ─────────────────────────────── */
+/* ── sheet (stacked: backdrop tap pops one level) ── */
+const sheetStack = [];
 export function openSheet(html, onMount) {
   const root = $("#sheet-root");
-  root.innerHTML = `<div class="sheet-backdrop"></div><div class="sheet" role="dialog"><div class="grabber"></div>${html}</div>`;
+  const layer = document.createElement("div");
+  layer.innerHTML = `<div class="sheet-backdrop"></div><div class="sheet" role="dialog"><div class="grabber"></div>${html}</div>`;
+  root.appendChild(layer);
   const close = () => {
-    root.innerHTML = "";
+    layer.remove();
+    const i = sheetStack.indexOf(close);
+    if (i >= 0) sheetStack.splice(i, 1);
     render();
   };
-  $(".sheet-backdrop", root).addEventListener("click", close);
-  if (onMount) onMount($(".sheet", root), close);
+  sheetStack.push(close);
+  $(".sheet-backdrop", layer).addEventListener("click", close);
+  if (onMount) onMount($(".sheet", layer), close);
   return close;
 }
 
 /* ── helpers ───────────────────────────── */
 const CHECK_SVG = `<svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const fmtMin = (m) => `${Math.floor(m / 60)}시간 ${m % 60}분`;
+function makeSwipeable(row, onDelete) {
+  let startX = null, dx = 0;
+  const begin = (x) => { startX = x; dx = 0; row.style.transition = "none"; };
+  const move = (x) => {
+    if (startX == null) return;
+    dx = Math.min(0, Math.max(-140, x - startX));
+    row.style.transform = `translateX(${dx}px)`;
+  };
+  const finish = () => {
+    if (startX == null) return;
+    row.style.transition = "transform .28s cubic-bezier(.32,.72,0,1)";
+    if (dx < -90) {
+      row.style.transform = "translateX(-140px)";
+      row.style.opacity = "0";
+      row.style.height = "0";
+      row.style.minHeight = "0";
+      row.style.overflow = "hidden";
+      row.style.padding = "0";
+      row.style.margin = "0";
+      setTimeout(onDelete, 200);
+    } else {
+      row.style.transform = "";
+    }
+    startX = null;
+  };
+  row.addEventListener("touchstart", (e) => begin(e.touches[0].clientX), { passive: true });
+  row.addEventListener("touchmove", (e) => move(e.touches[0].clientX), { passive: true });
+  row.addEventListener("touchend", finish);
+  row.addEventListener("mousedown", (e) => {
+    begin(e.clientX);
+    const mm = (ev) => move(ev.clientX);
+    const mu = () => { finish(); window.removeEventListener("mousemove", mm); window.removeEventListener("mouseup", mu); };
+    window.addEventListener("mousemove", mm);
+    window.addEventListener("mouseup", mu);
+  });
+}
+
 const nowHM = () => {
   const d = new Date();
   const p = (n) => String(n).padStart(2, "0");
@@ -137,7 +180,15 @@ function viewToday() {
           <div style="font-size:16px;font-weight:700">${store.fmtDate(selDate)}${isToday ? "" : ' <span class="chip" style="margin-left:4px">열람</span>'}</div>
           ${isToday ? `<p class="muted" style="padding:4px 0 0">지금: ${nowItem ? esc(nowItem.title) : "일정 없음"}${nextItem ? ` · 다음: ${esc(nextItem.title)}` : ""}</p>` : ""}
           <p class="muted" style="padding:2px 0 0">자습 ${fmtMin(todayMin)}</p>
-          ${isToday && !s.timer ? `
+          ${isToday && s.timer ? `
+          <div style="padding:10px 0 0">
+            <div style="font-size:40px;font-weight:200;font-variant-numeric:tabular-nums;letter-spacing:1px" id="timer-clock">00:00</div>
+            <p class="muted" style="padding:0">${esc(s.timer.label)}${s.timer.pausedAt ? " · 일시정지" : " 측정 중"}${s.timer.kind === "extra" ? " (추가)" : ""}</p>
+            <div style="display:flex;gap:8px;padding:8px 0 0">
+              <button class="btn" style="min-height:42px;padding:0 16px;font-size:14px" id="${s.timer.pausedAt ? "btn-resume" : "btn-pause"}">${s.timer.pausedAt ? "재개" : "일시정지"}</button>
+              <button class="btn primary" style="min-height:42px;padding:0 16px;font-size:14px" id="btn-stop">종료</button>
+            </div>
+          </div>` : isToday ? `
           <div style="display:flex;gap:8px;padding:10px 0 0">
             <button class="btn primary" style="min-height:42px;padding:0 18px;font-size:14px" id="btn-start">자습 시작</button>
             <button class="btn" style="min-height:42px;padding:0 18px;font-size:14px" id="btn-start-extra">추가 자습</button>
@@ -219,6 +270,15 @@ function viewToday() {
     render();
   });
 
+  const stopBtn = $("#btn-stop");
+  if (stopBtn) stopBtn.addEventListener("click", () => {
+    const elapsed = Math.round(store.timerElapsedSec() / 60);
+    const sess = store.stopTimer();
+    openAdjustSheet(sess, elapsed);
+  });
+  $("#btn-pause")?.addEventListener("click", () => { store.pauseTimer(); render(); });
+  $("#btn-resume")?.addEventListener("click", () => { store.resumeTimer(); render(); });
+
   $$("[data-finalize]", viewEl).forEach((b) => b.addEventListener("click", () => {
     const sess = store.get().sessions.find((x) => x.id === b.dataset.finalize);
     openAdjustSheet(sess, sess.measuredMin);
@@ -249,55 +309,12 @@ function startTimerTick() {
   clearInterval(tickTimer);
   tickTimer = setInterval(() => {
     const t = store.get().timer;
-    const el = $("#pill-clock");
+    const el = $("#timer-clock");
     if (!t || !el) { clearInterval(tickTimer); return; }
     const sec = store.timerElapsedSec();
     const p = (n) => String(n).padStart(2, "0");
     el.textContent = `${p(Math.floor(sec / 60))}:${p(sec % 60)}`;
   }, 500);
-}
-
-function renderPill() {
-  document.querySelector(".timer-pill")?.remove();
-  const t = store.get().timer;
-  if (!t) return;
-  const pill = document.createElement("button");
-  pill.className = "timer-pill";
-  pill.id = "timer-pill";
-  pill.innerHTML = `
-    <div class="pill-main">
-      <div class="pill-label">${esc(t.label)}${t.kind === "extra" ? " (추가)" : ""}</div>
-      <div class="pill-sub">${t.pausedAt ? "일시정지 중 · 눌러서 관리" : "측정 중 · 눌러서 관리"}</div>
-    </div>
-    <div class="pill-clock" id="pill-clock">00:00</div>`;
-  pill.addEventListener("click", openTimerSheet);
-  document.body.appendChild(pill);
-  startTimerTick();
-}
-
-function openTimerSheet() {
-  const t = store.get().timer;
-  if (!t) return;
-  const elapsed = Math.round(store.timerElapsedSec() / 60);
-  openSheet(`
-    <h2>${esc(t.label)}${t.kind === "extra" ? " (추가 자습)" : ""}</h2>
-    <p class="muted">측정된 시간: ${fmtMin(elapsed)}${t.pausedAt ? " · 일시정지 중" : ""}</p>
-    <div style="display:flex;gap:10px;padding:10px 0 4px">
-      ${t.pausedAt
-        ? `<button class="btn block" id="pt-resume">재개</button>`
-        : `<button class="btn block" id="pt-pause">일시정지</button>`}
-      <button class="btn primary block" id="pt-stop">종료</button>
-    </div>
-  `, (sheet, close) => {
-    $("#pt-pause", sheet)?.addEventListener("click", () => { store.pauseTimer(); close(); });
-    $("#pt-resume", sheet)?.addEventListener("click", () => { store.resumeTimer(); close(); });
-    $("#pt-stop", sheet).addEventListener("click", () => {
-      const el2 = Math.round(store.timerElapsedSec() / 60);
-      const sess = store.stopTimer();
-      close();
-      openAdjustSheet(sess, el2);
-    });
-  });
 }
 
 /* ── theme ─────────────────────────────── */
@@ -336,9 +353,7 @@ function scheduleNotifications() {
   }
 }
 
-/* ═════════ VIEW: STUDY (Things 3 style) ═════════ */
-const expanded = { subject: null, chapter: null };
-
+/* ═════════ VIEW: STUDY ═════════ */
 function viewStudy() {
   const s = store.get();
   const stats = store.lectureStats();
@@ -369,12 +384,13 @@ function viewStudy() {
       </div>
     </div>
     <div class="card">
-      <p class="card-title">과목 · 강의</p>
-      <div style="display:flex;gap:8px;padding:8px 0;margin:0 0 4px">
-        <input type="text" id="qa-subject" placeholder="새 과목 추가…" style="min-height:44px">
-        <button class="btn primary" id="qa-subject-add" style="min-height:44px;min-width:52px;font-size:20px">+</button>
+      <p class="card-title">과목 · 강의 · 왼쪽으로 밀면 삭제</p>
+      <div id="subject-list">
+        ${s.subjects.length ? s.subjects.map((sub) => subjectHtml(sub)).join("") : `<p class="muted">아직 과목이 없습니다. 아래에서 추가하세요.</p>`}
       </div>
-      ${s.subjects.length ? s.subjects.map((sub) => subjectHtml(sub)).join("") : `<p class="muted">위 입력란에 과목명을 적고 + 를 누르세요.</p>`}
+      <div style="display:flex;gap:10px;padding:10px 0 12px">
+        <button class="btn primary block" id="btn-add-subject">과목 추가</button>
+      </div>
     </div>
     ${s.goal.adjustLog.length ? `
     <div class="card">
@@ -391,130 +407,127 @@ function viewStudy() {
   subEl.textContent = "강의 진도와 목표를 관리합니다";
 
   function subjectHtml(sub) {
-    const open = expanded.subject === sub.id;
-    const lecCount = sub.chapters.reduce((a, c) => a + c.lectures.length, 0);
-    const doneCount = sub.chapters.reduce((a, c) => a + c.lectures.filter((l) => l.status === "완료").length, 0);
     return `
-      <div class="row" style="min-height:56px">
-        <button class="disc" data-expand-subject="${sub.id}" aria-label="${esc(sub.name)} 열기">${open ? "▾" : "▸"}</button>
-        <div class="row-main">
-          <div class="row-title">${esc(sub.name)}</div>
-          <div class="row-sub">${doneCount}/${lecCount}강 완료</div>
-          <div class="bar" style="margin-top:6px;height:5px"><i style="width:${lecCount ? Math.round(doneCount / lecCount * 100) : 0}%"></i></div>
-        </div>
-        <button class="btn" style="min-height:38px;padding:0 12px;font-size:15px" data-edit-subject="${sub.id}">⋯</button>
-      </div>
-      ${open ? sub.chapters.map((ch) => chapterHtml(sub, ch)).join("") + `
-      <div style="display:flex;gap:8px;padding:8px 0 8px 34px">
-        <input type="text" id="qa-chapter-${sub.id}" placeholder="새 챕터 추가…" style="min-height:40px">
-        <button class="btn" data-qa-chapter-add="${sub.id}" style="min-height:40px;min-width:48px;font-size:18px">+</button>
-      </div>` : ""}`;
-  }
-
-  function chapterHtml(sub, ch) {
-    const open = expanded.chapter === ch.id;
-    return `
-      <div style="padding-left:34px">
-        <div class="row" style="min-height:48px">
-          <button class="disc" data-expand-chapter="${ch.id}">${open ? "▾" : "▸"}</button>
-          <div class="row-main"><div class="row-title" style="font-size:15px">${esc(ch.name)}</div>
-            <div class="row-sub">${ch.lectures.length}강</div>
+      <div class="swipe-wrap">
+        <div class="row" data-swipe="subject:${sub.id}">
+          <div class="row-main">
+            <div class="row-title">${esc(sub.name)}</div>
+            <div class="row-sub">${sub.chapters.reduce((a, c) => a + c.lectures.length, 0)}강</div>
           </div>
-          <button class="btn" style="min-height:34px;padding:0 10px;font-size:14px" data-edit-chapter="${ch.id}">⋯</button>
+          <button class="btn" style="min-height:38px;padding:0 12px;font-size:15px" data-edit-subject="${sub.id}">⋯</button>
+          <button class="btn" style="min-height:38px;padding:0 14px;font-size:14px" data-add-chapter="${sub.id}">챕터 +</button>
         </div>
-        ${open ? ch.lectures.map((l) => `
-          <div class="row" style="min-height:44px;padding-left:26px">
-            <button class="check ${l.status === "완료" ? "on" : ""}" style="${l.status === "완료" ? "background:var(--success);border-color:var(--success);color:#fff" : ""}" data-cycle="${l.id}">${CHECK_SVG}</button>
-            <div class="row-main">
-              <div class="row-title" style="font-size:14px;${l.status === "완료" ? "color:var(--fg-secondary);text-decoration:line-through" : ""}">${esc(l.name)}</div>
+      </div>
+      ${sub.chapters.map((ch) => `
+        <div style="padding-left:14px">
+          <div class="swipe-wrap">
+            <div class="row" data-swipe="chapter:${ch.id}">
+              <div class="row-main"><div class="row-title" style="font-size:14px">${esc(ch.name)}</div></div>
+              <button class="btn" style="min-height:34px;padding:0 10px;font-size:14px" data-edit-chapter="${ch.id}">⋯</button>
+              <button class="btn" style="min-height:34px;padding:0 12px;font-size:13px" data-add-lecture="${ch.id}">강의 +</button>
             </div>
-            <button class="btn" style="min-height:32px;padding:0 10px;font-size:14px;color:var(--fg-secondary)" data-edit-lecture="${l.id}">⋯</button>
-            <button class="chip ${STATUS_CHIP[l.status]}" data-cycle="${l.id}" style="border:none">${esc(l.status)}</button>
-          </div>`).join("") + `
-          <div style="display:flex;gap:8px;padding:8px 0 8px 26px">
-            <input type="text" id="qa-lecture-${ch.id}" placeholder="새 강의 추가…" style="min-height:40px">
-            <button class="btn" data-qa-lecture-add="${ch.id}" style="min-height:40px;min-width:48px;font-size:18px">+</button>
-          </div>` : ""}
-      </div>`;
+          </div>
+          ${ch.lectures.map((l) => `
+            <div class="swipe-wrap" style="padding-left:14px">
+              <div class="row" style="min-height:44px" data-swipe="lecture:${l.id}">
+                <button class="check ${l.status === "완료" ? "on" : ""}" style="${l.status === "완료" ? "background:var(--success);border-color:var(--success);color:#fff" : ""}" data-cycle="${l.id}">${CHECK_SVG}</button>
+                <div class="row-main">
+                  <div class="row-title" style="font-size:14px;${l.status === "완료" ? "color:var(--fg-secondary);text-decoration:line-through" : ""}">${esc(l.name)}</div>
+                </div>
+                <button class="btn" style="min-height:32px;padding:0 10px;font-size:14px;color:var(--fg-secondary)" data-edit-lecture="${l.id}">⋯</button>
+                <button class="chip ${STATUS_CHIP[l.status]}" data-cycle="${l.id}" style="border:none">${esc(l.status)}</button>
+              </div>
+            </div>`).join("")}
+        </div>`).join("")}`;
   }
 
-  // quick add (Things 3 style inline)
-  const addSubjectInline = () => {
-    const el = $("#qa-subject", viewEl);
-    const v = el.value.trim();
-    if (!v) return;
-    store.addSubject(v);
-    expanded.subject = store.get().subjects.at(-1).id;
-    render();
-  };
-  $("#qa-subject-add", viewEl).addEventListener("click", addSubjectInline);
-  $("#qa-subject", viewEl).addEventListener("keydown", (e) => { if (e.key === "Enter") addSubjectInline(); });
-
-  $$("[data-qa-chapter-add]", viewEl).forEach((b) => b.addEventListener("click", () => {
-    const el = $(`#qa-chapter-${b.dataset.qaChapterAdd}`, viewEl);
-    const v = el.value.trim();
-    if (!v) return;
-    store.addChapter(b.dataset.qaChapterAdd, v);
-    render();
-  }));
-  $$("[data-qa-lecture-add]", viewEl).forEach((b) => b.addEventListener("click", () => {
-    const el = $(`#qa-lecture-${b.dataset.qaLectureAdd}`, viewEl);
-    const v = el.value.trim();
-    if (!v) return;
-    store.addLecture(b.dataset.qaLectureAdd, v);
-    render();
-  }));
-  $$("input[id^='qa-chapter-']", viewEl).forEach((el) => el.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") $(`[data-qa-chapter-add="${el.id.replace("qa-chapter-", "")}"]`, viewEl)?.click();
-  }));
-  $$("input[id^='qa-lecture-']", viewEl).forEach((el) => el.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") $(`[data-qa-lecture-add="${el.id.replace("qa-lecture-", "")}"]`, viewEl)?.click();
-  }));
-
-  // accordion
-  $$("[data-expand-subject]", viewEl).forEach((b) => b.addEventListener("click", () => {
-    expanded.subject = expanded.subject === b.dataset.expandSubject ? null : b.dataset.expandSubject;
-    if (expanded.subject !== b.dataset.expandSubject) expanded.chapter = null;
-    render();
-  }));
-  $$("[data-expand-chapter]", viewEl).forEach((b) => b.addEventListener("click", () => {
-    expanded.chapter = expanded.chapter === b.dataset.expandChapter ? null : b.dataset.expandChapter;
-    render();
-  }));
+  // swipe-to-delete
+  $$("[data-swipe]", viewEl).forEach((row) => {
+    const [kind, id] = row.dataset.swipe.split(":");
+    makeSwipeable(row, () => {
+      if (kind === "subject") store.deleteSubject(id);
+      else if (kind === "chapter") store.deleteChapter(id);
+      else store.deleteLecture(id);
+      render();
+      toast("삭제했습니다");
+    });
+  });
 
   // cycle status
-  $$("[data-cycle]", viewEl).forEach((b) => b.addEventListener("click", () => {
+  $$("[data-cycle]", viewEl).forEach((b) => b.addEventListener("click", (e) => {
+    if (e.target.closest("[data-swipe]") && !e.target.closest("[data-cycle]")) return;
     const st = store.cycleLecture(b.dataset.cycle);
     if (st === "완료") {
-      const name = findLectureName(b.dataset.cycle);
+      let name = "";
+      for (const sub of s.subjects) for (const ch of sub.chapters) for (const l of ch.lectures) if (l.id === b.dataset.cycle) name = l.name;
       store.logLectureDone(b.dataset.cycle, name);
     }
     render();
   }));
 
-  function findLectureName(id) {
-    for (const sub of s.subjects) for (const ch of sub.chapters) for (const l of ch.lectures) if (l.id === id) return l.name;
-    return "";
-  }
+  // add sheets
+  $("#btn-add-subject").addEventListener("click", () => {
+    openSheet(`
+      <h2>과목 추가</h2>
+      <div class="field"><label>과목명</label><input type="text" id="subj-name" placeholder="예: 재무회계론"></div>
+      <button class="btn primary block" id="btn-save-subj">추가</button>
+    `, (sheet, close) => {
+      $("#btn-save-subj", sheet).addEventListener("click", () => {
+        const v = $("#subj-name", sheet).value.trim();
+        if (!v) return;
+        store.addSubject(v);
+        close(); render();
+      });
+    });
+  });
 
-  // edit sheets (rename/delete)
+  $$("[data-add-chapter]").forEach((b) => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const sid = b.dataset.addChapter;
+    openSheet(`
+      <h2>챕터 추가</h2>
+      <div class="field"><label>챕터명</label><input type="text" id="ch-name" placeholder="예: 제3장"></div>
+      <button class="btn primary block" id="btn-save-ch">추가</button>
+    `, (sheet, close) => {
+      $("#btn-save-ch", sheet).addEventListener("click", () => {
+        const v = $("#ch-name", sheet).value.trim();
+        if (!v) return;
+        store.addChapter(sid, v);
+        close(); render();
+      });
+    });
+  }));
+
+  $$("[data-add-lecture]").forEach((b) => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const cid = b.dataset.addLecture;
+    openSheet(`
+      <h2>강의 추가</h2>
+      <div class="field"><label>강의명</label><input type="text" id="lec-name" placeholder="예: 1강 매매목적 부동산"></div>
+      <button class="btn primary block" id="btn-save-lec">추가</button>
+    `, (sheet, close) => {
+      $("#btn-save-lec", sheet).addEventListener("click", () => {
+        const v = $("#lec-name", sheet).value.trim();
+        if (!v) return;
+        store.addLecture(cid, v);
+        close(); render();
+      });
+    });
+  }));
+
+  // rename sheets (delete is via swipe)
   $$("[data-edit-subject]", viewEl).forEach((b) => b.addEventListener("click", () => {
     const sub = s.subjects.find((x) => x.id === b.dataset.editSubject);
     openSheet(`
-      <h2>과목 편집</h2>
+      <h2>과목 이름 변경</h2>
       <div class="field"><label>과목명</label><input type="text" id="es-name" value="${esc(sub.name)}"></div>
-      <button class="btn primary block" id="es-save">이름 저장</button>
-      <button class="btn danger block" id="es-del" style="margin-top:10px">과목 삭제</button>
+      <button class="btn primary block" id="es-save">저장</button>
+      <p class="muted" style="padding-top:10px">삭제는 목록에서 항목을 왼쪽으로 밀면 됩니다.</p>
     `, (sheet, close) => {
       $("#es-save", sheet).addEventListener("click", () => {
         const v = $("#es-name", sheet).value.trim();
         if (v) store.renameSubject(sub.id, v);
         close();
-      });
-      $("#es-del", sheet).addEventListener("click", () => {
-        store.deleteSubject(sub.id);
-        close();
-        toast("과목을 삭제했습니다");
       });
     });
   }));
@@ -524,20 +537,15 @@ function viewStudy() {
     for (const sub of s.subjects) { const f = sub.chapters.find((x) => x.id === b.dataset.editChapter); if (f) { ch = f; break; } }
     if (!ch) return;
     openSheet(`
-      <h2>챕터 편집</h2>
+      <h2>챕터 이름 변경</h2>
       <div class="field"><label>챕터명</label><input type="text" id="ec-name" value="${esc(ch.name)}"></div>
-      <button class="btn primary block" id="ec-save">이름 저장</button>
-      <button class="btn danger block" id="ec-del" style="margin-top:10px">챕터 삭제</button>
+      <button class="btn primary block" id="ec-save">저장</button>
+      <p class="muted" style="padding-top:10px">삭제는 목록에서 항목을 왼쪽으로 밀면 됩니다.</p>
     `, (sheet, close) => {
       $("#ec-save", sheet).addEventListener("click", () => {
         const v = $("#ec-name", sheet).value.trim();
         if (v) store.renameChapter(ch.id, v);
         close();
-      });
-      $("#ec-del", sheet).addEventListener("click", () => {
-        store.deleteChapter(ch.id);
-        close();
-        toast("챕터를 삭제했습니다");
       });
     });
   }));
@@ -547,20 +555,15 @@ function viewStudy() {
     for (const sub of s.subjects) for (const c of sub.chapters) { const f = c.lectures.find((x) => x.id === b.dataset.editLecture); if (f) { lec = f; break; } }
     if (!lec) return;
     openSheet(`
-      <h2>강의 편집</h2>
+      <h2>강의 이름 변경</h2>
       <div class="field"><label>강의명</label><input type="text" id="el-name" value="${esc(lec.name)}"></div>
-      <button class="btn primary block" id="el-save">이름 저장</button>
-      <button class="btn danger block" id="el-del" style="margin-top:10px">강의 삭제</button>
+      <button class="btn primary block" id="el-save">저장</button>
+      <p class="muted" style="padding-top:10px">삭제는 목록에서 항목을 왼쪽으로 밀면 됩니다.</p>
     `, (sheet, close) => {
       $("#el-save", sheet).addEventListener("click", () => {
         const v = $("#el-name", sheet).value.trim();
         if (v) store.renameLecture(lec.id, v);
         close();
-      });
-      $("#el-del", sheet).addEventListener("click", () => {
-        store.deleteLecture(lec.id);
-        close();
-        toast("강의를 삭제했습니다");
       });
     });
   }));
@@ -600,20 +603,17 @@ function viewWorkout() {
   const selDate = new Date(key + "T00:00:00");
   const part = store.todayWorkout(selDate);
   const doneToday = store.workoutDoneOn(key);
+  const isToday = key === todayKey;
+  const isRest = part === "휴식";
+  const routine = store.workoutRoutine(part);
+  const doneCount = isToday ? store.routineDoneToday() : (doneToday ? routine.length : 0);
   const week = store.startOfWeek();
   const weekDone = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(week); d.setDate(week.getDate() + i);
     return store.workoutDoneOn(store.dateKey(d));
   });
-  const doneCount = weekDone.filter(Boolean).length;
-  const isRest = part === "휴식";
-  const selDow = selDate.getDay();
-  const restDays = Object.entries(assign).filter(([, p]) => p === "휴식").map(([d]) => +d);
-  const activeDows = store.WEEKDAYS.map((_, i) => i).filter((d) => !restDays.includes(d));
-  const pos = activeDows.indexOf(selDow);
-  const nextDow = pos >= 0 && pos < activeDows.length - 1 ? activeDows[pos + 1] : null;
-  const nextPart = nextDow != null ? assign[nextDow] : null;
-  const isLast = nextDow == null;
+  const isLastStep = routine.length > 0 && doneCount >= routine.length - 1;
+  const nextExercise = routine[doneCount] || null;
 
   viewEl.innerHTML = `
     <div class="card">
@@ -625,22 +625,38 @@ function viewWorkout() {
           return `<button class="${cls}" data-wday="${k}">${w}</button>`;
         }).join("")}
       </div>
-      <p class="card-title">${store.fmtDate(selDate)} · 오늘의 운동</p>
+      <p class="card-title">${store.fmtDate(selDate)} · ${part}${isRest ? "" : " 데이"}</p>
       <div class="timer">
-        <div style="font-size:44px;font-weight:800;padding:8px 0">${part}</div>
-        <p class="timer-meta">${isRest ? "예정된 휴식입니다" : "주간 사이클: " + Object.values(assign).filter((x, i, a) => a.indexOf(x) === i).join(" → ")}</p>
+        <div style="font-size:40px;font-weight:800;padding:6px 0">${part}</div>
+        ${isRest
+          ? `<p class="timer-meta">예정된 휴식입니다</p>`
+          : `<p class="timer-meta">루틴 ${doneCount}/${routine.length} 완료</p>
+             <div class="bar" style="max-width:240px;margin:10px auto 0"><i style="width:${routine.length ? Math.round(doneCount / routine.length * 100) : 0}%"></i></div>`}
         <div class="timer-actions">
-          ${doneToday
-            ? `<button class="btn primary" id="btn-workout-undo" style="min-width:150px">이 날짜 기록 취소</button>`
+          ${!isToday ? "" : doneToday
+            ? `<button class="btn" id="btn-workout-undo" style="min-width:170px">오늘 기록 취소</button>`
             : isRest
               ? `<button class="btn primary" id="btn-workout-rest" style="min-width:180px">휴식 완료</button>`
-              : `<button class="btn primary" id="btn-workout-done" style="min-width:200px">${isLast ? "운동 완료" : "다음 운동: " + nextPart}</button>`}
+              : `<button class="btn primary" id="btn-next-ex" style="min-width:230px">${isLastStep ? "운동 완료" : "다음 운동: " + esc(nextExercise || "")}</button>
+                 ${doneCount > 0 ? `<button class="btn" id="btn-undo-step" style="min-width:64px;font-size:13px">되돌리기</button>` : ""}`}
         </div>
       </div>
-      <p class="muted" style="padding:0 4px 12px">이번 주 ${doneCount}회 완료 · 요일별 배정은 설정에서 변경할 수 있습니다</p>
+      <p class="muted" style="padding:0 4px 12px">이번 주 ${weekDone.filter(Boolean).length}회 완료 · 요일별 분할과 매일 루틴은 설정에서 편집할 수 있습니다</p>
     </div>
+    ${!isRest && routine.length ? `
     <div class="card">
-      <p class="card-title">요일별 배정</p>
+      <p class="card-title">오늘의 루틴</p>
+      ${routine.map((ex, i) => `
+        <div class="row ${i < doneCount ? "done" : ""}" style="min-height:46px">
+          <button class="check" tabindex="-1">${CHECK_SVG}</button>
+          <div class="row-main">
+            <div class="row-title" style="font-size:15px">${esc(ex)}</div>
+            ${i === doneCount && isToday && !doneToday ? `<div class="row-sub">다음 운동</div>` : ""}
+          </div>
+        </div>`).join("")}
+    </div>` : ""}
+    <div class="card">
+      <p class="card-title">요일별 분할</p>
       ${store.WEEKDAYS.map((w, i) => `
         <div class="row" style="min-height:44px">
           <div class="row-main"><div class="row-title" style="font-size:15px">${w}</div></div>
@@ -658,10 +674,15 @@ function viewWorkout() {
   `;
 
   titleEl.textContent = "운동";
-  subEl.textContent = "요일별 사이클로 균형 있게";
+  subEl.textContent = "요일별 분할 + 매일 루틴";
 
-  $("#btn-workout-done")?.addEventListener("click", () => {
-    store.completeWorkout();
+  $("#btn-next-ex")?.addEventListener("click", () => {
+    const r = store.advanceRoutine();
+    render();
+    if (r.finished) toast("오늘의 운동을 완료했습니다");
+  });
+  $("#btn-undo-step")?.addEventListener("click", () => {
+    store.undoRoutineStep();
     render();
   });
   $("#btn-workout-rest")?.addEventListener("click", () => {
@@ -682,7 +703,6 @@ function viewWorkout() {
   }));
 }
 
-/* ═════════ VIEW: STATS ═════════ */
 let statsRange = "week";
 function viewStats() {
   const week = store.startOfWeek();
@@ -913,10 +933,17 @@ function viewSettings() {
       </div>
       <div class="row">
         <div class="row-main">
-          <div class="row-title">운동 요일 설정</div>
+          <div class="row-title">요일별 분할</div>
           <div class="row-sub">추천 루틴 프리셋 + 요일별 종목 배정</div>
         </div>
         <button class="btn" style="min-height:40px;padding:0 16px" id="btn-wassign">편집</button>
+      </div>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title">매일 루틴</div>
+          <div class="row-sub">종목별 세부 운동 순서 편집 (운동 탭의 '다음 운동')</div>
+        </div>
+        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-routine">편집</button>
       </div>
       <div class="row">
         <div class="row-main">
@@ -927,7 +954,7 @@ function viewSettings() {
       </div>
     </div>
     <div class="card">
-      <p class="card-title">iCloud 캘린더 동기화 (CalDAV)</p>
+      <p class="card-title">iCloud 캘린더 동기화</p>
       <div class="row">
         <div class="row-main"><div class="row-title">동기화</div>
         <div class="row-sub">${st.caldavLastSync ? "마지막 동기화: " + new Date(st.caldavLastSync).toLocaleString("ko-KR") : "기본적으로 모든 데이터는 이 브라우저에만 저장됩니다"}</div></div>
@@ -1026,6 +1053,51 @@ function viewSettings() {
     });
   });
 
+  $("#btn-routine").addEventListener("click", () => {
+    let part = store.todayWorkout();
+    const renderRoutine = (sheet) => {
+      const list = store.workoutRoutine(part);
+      $("#routine-body", sheet).innerHTML = `
+        ${list.map((ex, i) => `
+          <div class="swipe-wrap">
+            <div class="row" style="min-height:46px" data-rt-swipe="${i}">
+              <div class="row-main"><div class="row-title" style="font-size:15px">${esc(ex)}</div></div>
+            </div>
+          </div>`).join("") || `<p class="muted">운동이 없습니다. 아래에서 추가하세요.</p>`}
+        <div style="display:flex;gap:8px;padding:10px 0">
+          <input type="text" id="rt-new" placeholder="새 운동 추가…" style="min-height:42px">
+          <button class="btn primary" id="rt-add" style="min-height:42px;min-width:52px;font-size:20px">+</button>
+        </div>`;
+      $$("[data-rt-swipe]", sheet).forEach((row) => {
+        makeSwipeable(row, () => {
+          store.setRoutineItem(part, +row.dataset.rtSwipe, null);
+          renderRoutine(sheet);
+        });
+      });
+      $("#rt-add", sheet).addEventListener("click", () => {
+        const v = $("#rt-new", sheet).value.trim();
+        if (!v) return;
+        store.setRoutineItem(part, -1, v);
+        renderRoutine(sheet);
+      });
+    };
+    openSheet(`
+      <h2>매일 루틴 편집</h2>
+      <p class="muted">종목을 선택해 그 날의 운동 순서를 편집합니다. 항목을 왼쪽으로 밀면 삭제됩니다.</p>
+      <div class="segment" id="rt-parts">
+        ${store.WORKOUT_PARTS.filter((p) => p !== "휴식").map((p) => `<button class="${p === part ? "active" : ""}" data-rt-part="${p}">${p}</button>`).join("")}
+      </div>
+      <div id="routine-body"></div>
+    `, (sheet, close) => {
+      renderRoutine(sheet);
+      $$("[data-rt-part]", sheet).forEach((b) => b.addEventListener("click", () => {
+        part = b.dataset.rtPart;
+        $$("[data-rt-part]", sheet).forEach((x) => x.classList.toggle("active", x === b));
+        renderRoutine(sheet);
+      }));
+    });
+  });
+
   $("#btn-wassign").addEventListener("click", () => {
     const assign = { ...store.workoutAssign() };
     openSheet(`
@@ -1110,7 +1182,7 @@ export function render(scrollTop = false) {
   clearInterval(tickTimer);
   VIEWS[currentView]();
   $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === currentView));
-  renderPill();
+  if (store.get().timer) startTimerTick();
   if (scrollTop) window.scrollTo({ top: 0 });
 }
 
