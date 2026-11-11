@@ -17,7 +17,7 @@ export const DEFAULT_SCHEDULE = [
   { id: "rest", title: "휴식", time: "하루 종일", days: [6] },
 ];
 
-export const WORKOUT_PARTS = ["등", "가슴", "어깨", "팔", "하체", "상체", "하체·코어", "밀기", "당기기", "전신", "휴식"];
+export const WORKOUT_CYCLE = ["등", "가슴", "어깨", "팔", "하체"];
 export const DEFAULT_ROUTINES = {
   "등": ["풀업", "랫풀다운", "시티드 케이블 로우", "바벨 로우"],
   "가슴": ["벤치프레스", "인클라인 덤벨 프레스", "케이블 체스트 프레스", "딥스"],
@@ -31,12 +31,6 @@ export const DEFAULT_ROUTINES = {
   "전신": ["스쿼트", "벤치프레스", "바벨 로우", "버피"],
   "휴식": []
 };
-export const WORKOUT_PRESETS = [
-  { name: "부위별 5분할", desc: "등·가슴·어깨·팔·하체 각 1회 — 세트 여유 있는 중급자", assign: { 1: "등", 2: "가슴", 3: "어깨", 4: "팔", 5: "하체", 0: "휴식", 6: "휴식" } },
-  { name: "PPL + 상하체", desc: "밀기·당기기·하체 + 상체·하체(하이브리드) — 회복·빈도 균형 추천", assign: { 1: "밀기", 2: "당기기", 3: "하체", 4: "상체", 5: "하체·코어", 0: "휴식", 6: "휴식" } },
-  { name: "상하 2분할", desc: "상체/하체 교대 — 바쁜 초중급자에게 가장 효율적", assign: { 1: "상체", 2: "하체", 3: "휴식", 4: "상체", 5: "하체", 6: "휴식", 0: "휴식" } },
-  { name: "풀바디 3일", desc: "전신 루틴 주 3회 — 초보자·시간 부족 시 최적", assign: { 1: "전신", 2: "휴식", 3: "전신", 4: "휴식", 5: "전신", 6: "휴식", 0: "휴식" } }
-];
 
 function defaultState() {
   return {
@@ -337,7 +331,7 @@ export function addLecture(chapterId, name) {
       }
 }
 export function cycleLecture(lectureId) {
-  const order = ["미학습", "복습 필요", "완료"];
+  const order = ["미학습", "완료"];
   for (const s of state.subjects)
     for (const c of s.chapters)
       for (const l of c.lectures)
