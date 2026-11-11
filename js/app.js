@@ -46,30 +46,40 @@ export function openSheet(html, onMount) {
 
 /* ── helpers ───────────────────────────── */
 const CHECK_SVG = `<svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const UNDO_SVG = `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h9a7 7 0 1 1 0 14h-3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`;
 const fmtMin = (m) => `${Math.floor(m / 60)}시간 ${m % 60}분`;
 function makeSwipeable(row, onDelete) {
-  let startX = null, dx = 0;
-  const begin = (x) => { startX = x; dx = 0; row.style.transition = "none"; };
+  const wrap = row.parentElement;
+  let startX = null, dx = 0, open = false;
+  const delBtn = document.createElement("button");
+  delBtn.className = "swipe-del";
+  delBtn.textContent = "삭제";
+  delBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    row.style.transition = "transform .25s var(--spring), opacity .2s";
+    row.style.transform = "translateX(-140px)";
+    row.style.opacity = "0";
+    setTimeout(onDelete, 180);
+  });
+  wrap.insertBefore(delBtn, row);
+  const setOpen = (v) => {
+    open = v;
+    row.style.transition = "transform .28s cubic-bezier(.32,.72,0,1)";
+    row.style.transform = v ? "translateX(-84px)" : "";
+  };
+  const begin = (x) => {
+    startX = x; dx = open ? -84 : 0;
+    row.style.transition = "none";
+  };
   const move = (x) => {
     if (startX == null) return;
-    dx = Math.min(0, Math.max(-140, x - startX));
+    dx = Math.min(0, Math.max(-140, x - startX + (open ? -0 : 0)));
+    if (open && dx > -84) dx = Math.min(0, dx);
     row.style.transform = `translateX(${dx}px)`;
   };
   const finish = () => {
     if (startX == null) return;
-    row.style.transition = "transform .28s cubic-bezier(.32,.72,0,1)";
-    if (dx < -90) {
-      row.style.transform = "translateX(-140px)";
-      row.style.opacity = "0";
-      row.style.height = "0";
-      row.style.minHeight = "0";
-      row.style.overflow = "hidden";
-      row.style.padding = "0";
-      row.style.margin = "0";
-      setTimeout(onDelete, 200);
-    } else {
-      row.style.transform = "";
-    }
+    setOpen(dx < -50);
     startX = null;
   };
   row.addEventListener("touchstart", (e) => begin(e.touches[0].clientX), { passive: true });
@@ -82,6 +92,7 @@ function makeSwipeable(row, onDelete) {
     window.addEventListener("mousemove", mm);
     window.addEventListener("mouseup", mu);
   });
+  row.addEventListener("click", () => { if (open) setOpen(false); }, true);
 }
 
 const nowHM = () => {
@@ -180,19 +191,7 @@ function viewToday() {
           <div style="font-size:16px;font-weight:700">${store.fmtDate(selDate)}${isToday ? "" : ' <span class="chip" style="margin-left:4px">열람</span>'}</div>
           ${isToday ? `<p class="muted" style="padding:4px 0 0">지금: ${nowItem ? esc(nowItem.title) : "일정 없음"}${nextItem ? ` · 다음: ${esc(nextItem.title)}` : ""}</p>` : ""}
           <p class="muted" style="padding:2px 0 0">자습 ${fmtMin(todayMin)}</p>
-          ${isToday && s.timer ? `
-          <div style="padding:10px 0 0">
-            <div style="font-size:40px;font-weight:200;font-variant-numeric:tabular-nums;letter-spacing:1px" id="timer-clock">00:00</div>
-            <p class="muted" style="padding:0">${esc(s.timer.label)}${s.timer.pausedAt ? " · 일시정지" : " 측정 중"}${s.timer.kind === "extra" ? " (추가)" : ""}</p>
-            <div style="display:flex;gap:8px;padding:8px 0 0">
-              <button class="btn" style="min-height:42px;padding:0 16px;font-size:14px" id="${s.timer.pausedAt ? "btn-resume" : "btn-pause"}">${s.timer.pausedAt ? "재개" : "일시정지"}</button>
-              <button class="btn primary" style="min-height:42px;padding:0 16px;font-size:14px" id="btn-stop">종료</button>
-            </div>
-          </div>` : isToday ? `
-          <div style="display:flex;gap:8px;padding:10px 0 0">
-            <button class="btn primary" style="min-height:42px;padding:0 18px;font-size:14px" id="btn-start">자습 시작</button>
-            <button class="btn" style="min-height:42px;padding:0 18px;font-size:14px" id="btn-start-extra">추가 자습</button>
-          </div>` : ""}
+
         </div>
         <div class="ring">
           <svg width="108" height="108" viewBox="0 0 108 108">
@@ -203,6 +202,28 @@ function viewToday() {
         </div>
       </div>
     </div>
+    ${isToday ? `<div class="card">
+      <p class="card-title">자습 타이머</p>
+      ${s.timer
+        ? `<div class="timer">
+            <div class="timer-time" id="timer-clock">…</div>
+            <p class="timer-meta">${esc(s.timer.label)}${s.timer.pausedAt ? " · 일시정지" : " 측정 중"}${s.timer.kind === "extra" ? " (추가 자습)" : ""}</p>
+            <div class="timer-actions">
+              ${s.timer.pausedAt
+                ? `<button class="btn" id="btn-resume">재개</button>`
+                : `<button class="btn" id="btn-pause">일시정지</button>`}
+              <button class="btn primary" id="btn-stop">종료</button>
+            </div>
+          </div>`
+        : `<div class="timer">
+            <div class="timer-time" style="color:var(--fg-tertiary)">00:00</div>
+            <p class="timer-meta">측정 중인 자습이 없습니다</p>
+            <div class="timer-actions">
+              <button class="btn primary" id="btn-start">자습 시작</button>
+              <button class="btn" id="btn-start-extra">추가 자습</button>
+            </div>
+          </div>`}
+    </div>` : ""}
     <div class="card">
       <p class="card-title">${isToday ? "오늘의 일정" : "일정"} · 요일을 눌러 이동</p>
       ${checks.map((c) => `
@@ -354,6 +375,13 @@ function scheduleNotifications() {
 }
 
 /* ═════════ VIEW: STUDY ═════════ */
+const adding = { level: null, id: null };
+const ADD_ROW = (id) => `
+  <div style="display:flex;gap:8px;padding:8px 0">
+    <input type="text" id="${id}" placeholder="입력 후 Enter 또는 +" style="min-height:42px">
+    <button class="btn primary" data-add-confirm="${id}" style="min-height:42px;min-width:52px;font-size:20px">+</button>
+  </div>`;
+
 function viewStudy() {
   const s = store.get();
   const stats = store.lectureStats();
@@ -386,10 +414,11 @@ function viewStudy() {
     <div class="card">
       <p class="card-title">과목 · 강의 · 왼쪽으로 밀면 삭제</p>
       <div id="subject-list">
-        ${s.subjects.length ? s.subjects.map((sub) => subjectHtml(sub)).join("") : `<p class="muted">아직 과목이 없습니다. 아래에서 추가하세요.</p>`}
+        ${adding.level === "subject" ? ADD_ROW("qa-subject") : ""}
+        ${s.subjects.length ? s.subjects.map((sub) => subjectHtml(sub)).join("") : `<p class="muted">아직 과목이 없습니다. 아래 버튼으로 추가하세요.</p>`}
       </div>
       <div style="display:flex;gap:10px;padding:10px 0 12px">
-        <button class="btn primary block" id="btn-add-subject">과목 추가</button>
+        <button class="btn primary block" id="btn-add-subject">${adding.level === "subject" ? "입력 취소" : "＋ 과목 추가"}</button>
       </div>
     </div>
     ${s.goal.adjustLog.length ? `
@@ -415,18 +444,20 @@ function viewStudy() {
             <div class="row-sub">${sub.chapters.reduce((a, c) => a + c.lectures.length, 0)}강</div>
           </div>
           <button class="btn" style="min-height:38px;padding:0 12px;font-size:15px" data-edit-subject="${sub.id}">⋯</button>
-          <button class="btn" style="min-height:38px;padding:0 14px;font-size:14px" data-add-chapter="${sub.id}">챕터 +</button>
+          <button class="btn" style="min-height:38px;padding:0 14px;font-size:14px" data-add-chapter="${sub.id}">${adding.level === "chapter" && adding.id === sub.id ? "취소" : "챕터 +"}</button>
         </div>
       </div>
+      ${adding.level === "chapter" && adding.id === sub.id ? `<div style="padding-left:14px">${ADD_ROW("qa-chapter")}</div>` : ""}
       ${sub.chapters.map((ch) => `
         <div style="padding-left:14px">
           <div class="swipe-wrap">
             <div class="row" data-swipe="chapter:${ch.id}">
               <div class="row-main"><div class="row-title" style="font-size:14px">${esc(ch.name)}</div></div>
               <button class="btn" style="min-height:34px;padding:0 10px;font-size:14px" data-edit-chapter="${ch.id}">⋯</button>
-              <button class="btn" style="min-height:34px;padding:0 12px;font-size:13px" data-add-lecture="${ch.id}">강의 +</button>
+              <button class="btn" style="min-height:34px;padding:0 12px;font-size:13px" data-add-lecture="${ch.id}">${adding.level === "lecture" && adding.id === ch.id ? "취소" : "강의 +"}</button>
             </div>
           </div>
+          ${adding.level === "lecture" && adding.id === ch.id ? `<div style="padding-left:14px">${ADD_ROW("qa-lecture")}</div>` : ""}
           ${ch.lectures.map((l) => `
             <div class="swipe-wrap" style="padding-left:14px">
               <div class="row" style="min-height:44px" data-swipe="lecture:${l.id}">
@@ -465,53 +496,56 @@ function viewStudy() {
     render();
   }));
 
-  // add sheets
+  // inline add (no sheet)
+  const wireAddRow = (inputId, onAdd) => {
+    const input = $("#" + inputId, viewEl);
+    if (!input) return;
+    input.focus();
+    const confirm = $(`[data-add-confirm="${inputId}"]`, viewEl);
+    confirm?.addEventListener("click", onAdd);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") onAdd(); });
+  };
+
   $("#btn-add-subject").addEventListener("click", () => {
-    openSheet(`
-      <h2>과목 추가</h2>
-      <div class="field"><label>과목명</label><input type="text" id="subj-name" placeholder="예: 재무회계론"></div>
-      <button class="btn primary block" id="btn-save-subj">추가</button>
-    `, (sheet, close) => {
-      $("#btn-save-subj", sheet).addEventListener("click", () => {
-        const v = $("#subj-name", sheet).value.trim();
-        if (!v) return;
-        store.addSubject(v);
-        close(); render();
-      });
+    if (adding.level === "subject") { adding.level = null; render(); return; }
+    adding.level = "subject"; adding.id = null;
+    render();
+    wireAddRow("qa-subject", () => {
+      const v = $("#qa-subject", viewEl).value.trim();
+      if (!v) return;
+      store.addSubject(v);
+      adding.level = null;
+      render();
     });
   });
 
   $$("[data-add-chapter]").forEach((b) => b.addEventListener("click", (e) => {
     e.stopPropagation();
     const sid = b.dataset.addChapter;
-    openSheet(`
-      <h2>챕터 추가</h2>
-      <div class="field"><label>챕터명</label><input type="text" id="ch-name" placeholder="예: 제3장"></div>
-      <button class="btn primary block" id="btn-save-ch">추가</button>
-    `, (sheet, close) => {
-      $("#btn-save-ch", sheet).addEventListener("click", () => {
-        const v = $("#ch-name", sheet).value.trim();
-        if (!v) return;
-        store.addChapter(sid, v);
-        close(); render();
-      });
+    if (adding.level === "chapter" && adding.id === sid) { adding.level = null; render(); return; }
+    adding.level = "chapter"; adding.id = sid;
+    render();
+    wireAddRow("qa-chapter", () => {
+      const v = $("#qa-chapter", viewEl).value.trim();
+      if (!v) return;
+      store.addChapter(sid, v);
+      adding.level = null;
+      render();
     });
   }));
 
   $$("[data-add-lecture]").forEach((b) => b.addEventListener("click", (e) => {
     e.stopPropagation();
     const cid = b.dataset.addLecture;
-    openSheet(`
-      <h2>강의 추가</h2>
-      <div class="field"><label>강의명</label><input type="text" id="lec-name" placeholder="예: 1강 매매목적 부동산"></div>
-      <button class="btn primary block" id="btn-save-lec">추가</button>
-    `, (sheet, close) => {
-      $("#btn-save-lec", sheet).addEventListener("click", () => {
-        const v = $("#lec-name", sheet).value.trim();
-        if (!v) return;
-        store.addLecture(cid, v);
-        close(); render();
-      });
+    if (adding.level === "lecture" && adding.id === cid) { adding.level = null; render(); return; }
+    adding.level = "lecture"; adding.id = cid;
+    render();
+    wireAddRow("qa-lecture", () => {
+      const v = $("#qa-lecture", viewEl).value.trim();
+      if (!v) return;
+      store.addLecture(cid, v);
+      adding.level = null;
+      render();
     });
   }));
 
@@ -612,7 +646,7 @@ function viewWorkout() {
     const d = new Date(week); d.setDate(week.getDate() + i);
     return store.workoutDoneOn(store.dateKey(d));
   });
-  const isLastStep = routine.length > 0 && doneCount >= routine.length - 1;
+  const allDone = routine.length > 0 && doneCount >= routine.length;
   const nextExercise = routine[doneCount] || null;
 
   viewEl.innerHTML = `
@@ -637,8 +671,8 @@ function viewWorkout() {
             ? `<button class="btn" id="btn-workout-undo" style="min-width:170px">오늘 기록 취소</button>`
             : isRest
               ? `<button class="btn primary" id="btn-workout-rest" style="min-width:180px">휴식 완료</button>`
-              : `<button class="btn primary" id="btn-next-ex" style="min-width:230px">${isLastStep ? "운동 완료" : "다음 운동: " + esc(nextExercise || "")}</button>
-                 ${doneCount > 0 ? `<button class="btn" id="btn-undo-step" style="min-width:64px;font-size:13px">되돌리기</button>` : ""}`}
+              : `<button class="btn primary" id="btn-next-ex" style="min-width:230px">${allDone ? "운동 완료" : "다음 운동: " + esc(nextExercise || "")}</button>
+                 ${doneCount > 0 ? `<button class="btn" id="btn-undo-step" aria-label="한 운동 되돌리기" style="min-width:52px;padding:0">${UNDO_SVG}</button>` : ""}`}
         </div>
       </div>
       <p class="muted" style="padding:0 4px 12px">이번 주 ${weekDone.filter(Boolean).length}회 완료 · 요일별 분할과 매일 루틴은 설정에서 편집할 수 있습니다</p>
@@ -651,7 +685,7 @@ function viewWorkout() {
           <button class="check" tabindex="-1">${CHECK_SVG}</button>
           <div class="row-main">
             <div class="row-title" style="font-size:15px">${esc(ex)}</div>
-            ${i === doneCount && isToday && !doneToday ? `<div class="row-sub">다음 운동</div>` : ""}
+            ${i === doneCount && isToday && !doneToday && !allDone ? `<div class="row-sub">다음 운동</div>` : ""}
           </div>
         </div>`).join("")}
     </div>` : ""}
@@ -1178,9 +1212,18 @@ function viewSettings() {
 /* ── router ─────────────────────────────── */
 const VIEWS = { today: viewToday, study: viewStudy, workout: viewWorkout, stats: viewStats, settings: viewSettings };
 
+const TAB_ORDER = ["today", "study", "workout", "stats", "settings"];
+let prevTab = "today";
+
 export function render(scrollTop = false) {
   clearInterval(tickTimer);
   VIEWS[currentView]();
+  if (currentView !== prevTab) {
+    viewEl.classList.remove("slide-next", "slide-prev");
+    void viewEl.offsetWidth;
+    viewEl.classList.add(TAB_ORDER.indexOf(currentView) > TAB_ORDER.indexOf(prevTab) ? "slide-next" : "slide-prev");
+    prevTab = currentView;
+  }
   $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === currentView));
   if (store.get().timer) startTimerTick();
   if (scrollTop) window.scrollTo({ top: 0 });

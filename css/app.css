@@ -317,11 +317,18 @@ button {
 .tab:active { transform: scale(0.92); }
 .tab.active { color: var(--accent); }
 .tab-icon { width: 26px; height: 26px; }
-.tab.active .tab-icon { animation: tabPop 0.32s var(--spring); }
-@keyframes tabPop {
-  0% { transform: scale(1); }
-  45% { transform: scale(1.22); }
-  100% { transform: scale(1); }
+.tab-icon { transition: transform 0.25s var(--ease), opacity 0.25s var(--ease); }
+.tab.active .tab-icon { transform: scale(1.08); }
+.tab:not(.active) .tab-icon { opacity: 0.72; }
+.view.slide-next { animation: slideNext 0.3s var(--ease) both; }
+.view.slide-prev { animation: slidePrev 0.3s var(--ease) both; }
+@keyframes slideNext {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes slidePrev {
+  from { opacity: 0; transform: translateX(-28px); }
+  to { opacity: 1; transform: none; }
 }
 @keyframes checkPop {
   0% { transform: scale(0.6); }
@@ -406,20 +413,19 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
   border-radius: 12px;
   margin: 2px 0;
 }
-.swipe-wrap::before {
-  content: "삭제";
+.swipe-del {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0;
+  width: 84px;
+  border: none;
   background: var(--danger);
   color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 22px;
   font-size: 14px;
   font-weight: 700;
   border-radius: 12px;
+  font-family: inherit;
 }
+.swipe-del:active { opacity: 0.8; }
 .swipe-wrap > .row {
   position: relative;
   background: var(--bg-elevated);

@@ -412,14 +412,14 @@ export function advanceRoutine() {
   const part = todayWorkout();
   const list = workoutRoutine(part);
   const done = routineDoneToday();
-  if (done >= list.length - 1) {
+  if (done >= list.length) {
     state.workout.progress = { date: null, done: 0 };
     completeWorkout();
     return { finished: true };
   }
   state.workout.progress.done = done + 1;
   save();
-  return { finished: false, next: list[done + 1] };
+  return { finished: false, next: list[done + 1] || null, allDone: done + 1 >= list.length };
 }
 export function undoRoutineStep() {
   const p = state.workout.progress;
