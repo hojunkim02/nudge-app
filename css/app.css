@@ -423,6 +423,36 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 .switch.on::after { transform: translateX(20px); }
 
 /* ── Swipe-to-delete ────────────────────── */
+/* ── Inline rename input ── */
+input.ren {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  margin: 0;
+  border: 1.5px solid var(--accent);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--fg);
+  font: inherit;
+}
+input.ren:focus { outline: none; }
+.edit-tap { cursor: text; }
+
+/* ── Drag handle ── */
+.drag-handle {
+  flex: none;
+  width: 30px; height: 34px;
+  margin-right: 2px;
+  border: none;
+  background: none;
+  color: var(--fg-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+.drag-handle svg { width: 18px; height: 18px; }
+
 .swipe-wrap {
   position: relative;
   overflow: hidden;
@@ -441,7 +471,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
   justify-content: center;
   border-radius: 12px;
 }
-.swipe-del svg { width: 21px; height: 21px; }
+.swipe-del svg { width: 19px; height: 19px; }
 .swipe-del:active { opacity: 0.8; }
 .swipe-wrap > .row {
   transition: transform 0.4s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.25s ease;
@@ -496,8 +526,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
   color: var(--fg-secondary);
 }
 .day-dot.today { background: var(--accent); color: #fff; }
-.day-dot.is-today:not(.today) { border: 2px solid var(--accent); }
-.day-dot.today { border: none; }
+.day-dot.is-today:not(.today) { box-shadow: inset 0 0 0 2px var(--accent); }
 .day-dot.done { background: rgba(var(--success-rgb), 0.18); color: var(--success); }
 .day-dot { border: none; font: inherit; width: 100%; transition: transform 0.15s var(--spring); }
 .day-dot:active { transform: scale(0.9); }

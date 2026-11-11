@@ -396,6 +396,13 @@ export function setRoutineItem(part, idx, name) {
   else r[idx] = name;
   save();
 }
+export function reorderRoutine(part, from, to) {
+  const r = state.workout.routines[part];
+  if (!r || from === to || from < 0 || from >= r.length) return;
+  const [item] = r.splice(from, 1);
+  r.splice(Math.max(0, Math.min(r.length, to)), 0, item);
+  save();
+}
 export function routineDoneToday() {
   const p = state.workout.progress;
   const today = dateKey();

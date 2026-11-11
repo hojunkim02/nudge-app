@@ -57,7 +57,9 @@ const UNDO_SVG = `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 14
 const PLUS_SVG = `<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`;
 const PENCIL_SVG = `<svg viewBox="0 0 24 24"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
 const TRASH_SVG = `<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m3 0v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+const GRIP_SVG = `<svg viewBox="0 0 24 24"><path d="M9 5.5h.01M9 12h.01M9 18.5h.01M15.5 5.5h.01M15.5 12h.01M15.5 18.5h.01" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>`;
 const fmtMin = (m) => `${Math.floor(m / 60)}시간 ${m % 60}분`;
+let openSwipe = null;
 function makeSwipeable(row, onDelete) {
   const wrap = row.parentElement;
   let startX = null, dx = 0, open = false;
@@ -72,10 +74,13 @@ function makeSwipeable(row, onDelete) {
     setTimeout(onDelete, 180);
   });
   wrap.insertBefore(delBtn, row);
+  const close = () => { open = false; row.style.transition = "transform .28s cubic-bezier(.32,.72,0,1)"; row.style.transform = ""; };
   const setOpen = (v) => {
     open = v;
     row.style.transition = "transform .28s cubic-bezier(.32,.72,0,1)";
     row.style.transform = v ? "translateX(-84px)" : "";
+    if (v) { if (openSwipe && openSwipe.row !== row) openSwipe.close(); openSwipe = { row, close }; }
+    else if (openSwipe && openSwipe.row === row) openSwipe = null;
   };
   const begin = (x) => {
     startX = x; dx = open ? -84 : 0;
@@ -92,10 +97,11 @@ function makeSwipeable(row, onDelete) {
     setOpen(dx < -50);
     startX = null;
   };
-  row.addEventListener("touchstart", (e) => begin(e.touches[0].clientX), { passive: true });
+  row.addEventListener("touchstart", (e) => { if (e.target.closest(".drag-handle")) return; begin(e.touches[0].clientX); }, { passive: true });
   row.addEventListener("touchmove", (e) => move(e.touches[0].clientX), { passive: true });
   row.addEventListener("touchend", finish);
   row.addEventListener("mousedown", (e) => {
+    if (e.target.closest(".drag-handle")) return;
     begin(e.clientX);
     const mm = (ev) => move(ev.clientX);
     const mu = () => { finish(); window.removeEventListener("mousemove", mm); window.removeEventListener("mouseup", mu); };
@@ -110,6 +116,19 @@ const nowHM = () => {
   const p = (n) => String(n).padStart(2, "0");
   return `${p(d.getHours())}:${p(d.getMinutes())}`;
 };
+
+/* ── screen wake lock (타이머 실행 중 화면 꺼짐 방지) ── */
+let wakeLock = null;
+async function keepAwake() {
+  try { wakeLock = await navigator.wakeLock?.request("screen"); } catch { wakeLock = null; }
+}
+function releaseAwake() {
+  try { wakeLock?.release(); } catch {}
+  wakeLock = null;
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && store.get().timer && !store.get().timer.pausedAt) keepAwake();
+});
 
 /* ═════════ VIEW: TODAY ═════════ */
 let selDay = null;
@@ -128,7 +147,8 @@ function viewToday() {
   const todayMin = store.minutesOn(key);
 
   const todayLunch = s.lunch[key];
-  const lunchCheck = checks.find((c) => c.id === "lunch");
+  const lunchCheck = checks.find((c) => c.id === "lunch" || c.title.includes("점심"));
+  const lunchId = lunchCheck ? lunchCheck.id : "lunch";
   const lunchYes = store.lunchThisWeek();
   const lunchDecided = todayLunch !== undefined;
   if (lunchCheck) lunchCheck.hidden = !lunchDecided && todayLunch !== "yes";
@@ -207,9 +227,21 @@ function viewToday() {
             <circle class="track" cx="54" cy="54" r="47"></circle>
             <circle class="fill" cx="54" cy="54" r="47" stroke-dasharray="295.3" stroke-dashoffset="${295.3 * (1 - pct / 100)}"></circle>
           </svg>
-          <div class="ring-label"><div>${pct}%<small>${doneCount}/${checks.length} 완료</small></div></div>
+          <div class="ring-label"><div id="ring-label">${pct}%<small id="ring-count">${doneCount}/${checks.length} 완료</small></div></div>
         </div>
       </div>
+      ${isToday ? `
+      <div style="margin:8px 0 4px;border-radius:14px;background:rgba(var(--accent-rgb), 0.12);padding:12px 14px">
+        <div style="font-size:12px;font-weight:700;color:var(--accent);letter-spacing:0.3px">지금</div>
+        <div style="font-size:16px;font-weight:700">${nowItem ? esc(nowItem.title) : "일정 없음"}</div>
+        ${nowItem ? `<div class="row-sub" style="color:var(--fg-secondary)">${nowItem.time}</div>` : ""}
+      </div>
+      ${nextItem ? `
+      <div style="margin:4px 0 8px;border-radius:14px;background:var(--bg-secondary);padding:10px 14px">
+        <div style="font-size:12px;font-weight:700;color:var(--fg-secondary)">다음</div>
+        <div style="font-size:15px;font-weight:600">${esc(nextItem.title)}</div>
+        <div class="row-sub" style="color:var(--fg-secondary)">${nextItem.time}</div>
+      </div>` : ""}` : ""}
     </div>
     ${isToday ? `<div class="card">
       <p class="card-title">자습 타이머</p>
@@ -235,18 +267,6 @@ function viewToday() {
     </div>` : ""}
     <div class="card">
       <p class="card-title">${isToday ? "오늘의 일정" : "일정"}</p>
-      ${isToday ? `
-      <div style="margin:8px 0 4px;border-radius:14px;background:rgba(var(--accent-rgb), 0.12);padding:12px 14px">
-        <div style="font-size:12px;font-weight:700;color:var(--accent);letter-spacing:0.3px">지금</div>
-        <div style="font-size:16px;font-weight:700">${nowItem ? esc(nowItem.title) : "일정 없음"}</div>
-        ${nowItem ? `<div class="row-sub" style="color:var(--fg-secondary)">${nowItem.time}</div>` : ""}
-      </div>
-      ${nextItem ? `
-      <div style="margin:4px 0 8px;border-radius:14px;background:var(--bg-secondary);padding:10px 14px">
-        <div style="font-size:12px;font-weight:700;color:var(--fg-secondary)">다음</div>
-        <div style="font-size:15px;font-weight:600">${esc(nextItem.title)}</div>
-        <div class="row-sub" style="color:var(--fg-secondary)">${nextItem.time}</div>
-      </div>` : ""}` : ""}
       ${checks.map((c) => `
         <div class="row ${done[c.id] ? "done" : ""}" data-check="${c.id}" data-date="${key}" ${lunchCheck && c.id === "lunch" && lunchCheck.hidden ? 'style="display:none"' : ""}>
           <button class="check" aria-label="${esc(c.title)} 완료">${CHECK_SVG}</button>
@@ -274,10 +294,12 @@ function viewToday() {
       if (!e.target.closest(".check")) return;
       const on = store.toggleCheck(key, row.dataset.check);
       row.classList.toggle("done", on);
-      const pct2 = Math.round((checks.filter((c) => (c.id === row.dataset.check ? on : !!store.dayChecks(key)[c.id])).length / Math.max(1, checks.length)) * 100);
+      const done2 = checks.filter((c) => (c.id === row.dataset.check ? on : !!store.dayChecks(key)[c.id])).length;
+      const pct2 = Math.round((done2 / Math.max(1, checks.length)) * 100);
       const ring = $(".ring .fill", viewEl);
       if (ring) ring.style.strokeDashoffset = 295.3 * (1 - pct2 / 100);
-      $(".ring-label > div", viewEl).childNodes[0].textContent = pct2 + "%";
+      const lbl = $("#ring-label", viewEl);
+      if (lbl) lbl.innerHTML = `${pct2}%<small id="ring-count">${done2}/${checks.length} 완료</small>`;
     });
   });
 
@@ -290,11 +312,12 @@ function viewToday() {
   $("#lunch-yes")?.addEventListener("click", () => {
     if (!store.lunchAvailable()) return;
     store.setLunch(key, "yes");
-    store.setCheck(key, "lunch", true);
+    store.setCheck(key, lunchId, true);
     render();
   });
   $("#lunch-no")?.addEventListener("click", () => {
     store.setLunch(key, "no");
+    store.setCheck(key, lunchId, false);
     render();
   });
 
@@ -303,17 +326,20 @@ function viewToday() {
     const h = new Date().getHours();
     const label = h < 12 ? "오전 자습" : h < 15 ? "점심 자습" : h >= 18 ? "저녁 자습" : "자습";
     store.startTimer(label);
+    keepAwake();
     render();
   });
 
   const extraBtn = $("#btn-start-extra");
   if (extraBtn) extraBtn.addEventListener("click", () => {
     store.startTimer("추가 자습", "extra");
+    keepAwake();
     render();
   });
 
   const stopBtn = $("#btn-stop");
   if (stopBtn) stopBtn.addEventListener("click", () => {
+    releaseAwake();
     const elapsed = Math.round(store.timerElapsedSec() / 60);
     const sess = store.stopTimer();
     openAdjustSheet(sess, elapsed);
@@ -321,7 +347,7 @@ function viewToday() {
   const pauseBtn = $("#btn-pause") || $("#btn-resume");
   pauseBtn?.addEventListener("click", (e) => {
     const paused = !!store.get().timer.pausedAt;
-    const t = paused ? (store.resumeTimer(), store.get().timer) : (store.pauseTimer(), store.get().timer);
+    const t = paused ? (store.resumeTimer(), keepAwake(), store.get().timer) : (store.pauseTimer(), releaseAwake(), store.get().timer);
     e.currentTarget.id = t.pausedAt ? "btn-resume" : "btn-pause";
     e.currentTarget.textContent = t.pausedAt ? "재개" : "일시정지";
     const meta = $(".timer-meta", viewEl);
@@ -414,7 +440,6 @@ function viewStudy() {
   const stats = store.lectureStats();
   const pct = stats.total ? Math.round((stats.done / stats.total) * 100) : 0;
   const todayGoal = s.goal.daily;
-  const STATUS_CHIP = { "미학습": "", "완료": "green" };
   const origGoal = s.goalBase;
   const doneToday = store.lecturesDoneOn(store.dateKey());
   const goalPct = Math.min(100, Math.round((doneToday / Math.max(1, todayGoal)) * 100));
@@ -481,9 +506,8 @@ function viewStudy() {
           <div class="swipe-wrap">
             <div class="row" data-swipe="chapter:${ch.id}">
               <div class="row-main">${editing.level === "chapter" && editing.id === ch.id
-                ? `<input type="text" class="ren" id="ren-chapter" value="${esc(ch.name)}" style="min-height:36px;font-size:14px">`
-                : `<div class="row-title" style="font-size:14px">${esc(ch.name)}</div>`}</div>
-              <button class="btn icon-btn" style="min-width:34px;min-height:34px" aria-label="챕터 이름 변경" data-edit-chapter="${ch.id}">${PENCIL_SVG}</button>
+                ? `<input type="text" class="ren" id="ren-chapter" value="${esc(ch.name)}" style="font-size:14px">`
+                : `<div class="row-title edit-tap" style="font-size:14px" data-edit-chapter="${ch.id}">${esc(ch.name)}</div>`}</div>
               <button class="btn icon-btn" style="min-width:34px;min-height:34px;background:var(--accent);color:#fff" aria-label="강의 추가" data-add-lecture="${ch.id}">${adding.level === "lecture" && adding.id === ch.id ? "취소" : PLUS_SVG}</button>
             </div>
           </div>
@@ -494,11 +518,9 @@ function viewStudy() {
                 <button class="check ${l.status === "완료" ? "on" : ""}" style="${l.status === "완료" ? "background:var(--success);border-color:var(--success);color:#fff" : ""}" data-cycle="${l.id}">${CHECK_SVG}</button>
                 <div class="row-main">
                   ${editing.level === "lecture" && editing.id === l.id
-                    ? `<input type="text" class="ren" id="ren-lecture" value="${esc(l.name)}" style="min-height:36px;font-size:14px">`
-                    : `<div class="row-title" style="font-size:14px;${l.status === "완료" ? "color:var(--fg-secondary);text-decoration:line-through" : ""}">${esc(l.name)}</div>`}
+                    ? `<input type="text" class="ren" id="ren-lecture" value="${esc(l.name)}" style="font-size:14px">`
+                    : `<div class="row-title edit-tap" style="font-size:14px;${l.status === "완료" ? "color:var(--fg-secondary);text-decoration:line-through" : ""}" data-edit-lecture="${l.id}">${esc(l.name)}</div>`}
                 </div>
-                <button class="btn icon-btn" style="min-width:34px;min-height:34px;color:var(--fg-secondary)" aria-label="강의 이름 변경" data-edit-lecture="${l.id}">${PENCIL_SVG}</button>
-                <button class="chip ${STATUS_CHIP[l.status]}" data-cycle="${l.id}" style="border:none">${esc(l.status)}</button>
               </div>
             </div>`).join("")}
         </div>`).join("")}`;
@@ -587,6 +609,7 @@ function viewStudy() {
     if (!input) return;
     input.focus();
     input.select();
+    input.addEventListener("focus", () => setTimeout(() => input.scrollIntoView({ block: "center", behavior: "smooth" }), 350));
     const done = () => {
       const v = input.value.trim();
       if (v) save(v);
@@ -644,7 +667,6 @@ function viewStudy() {
 /* ═════════ VIEW: WORKOUT ═════════ */
 function viewWorkout() {
   const s = store.get();
-  const assign = store.workoutAssign();
   const todayKey = store.dateKey();
   const key = selDay || todayKey;
   const selDate = new Date(key + "T00:00:00");
@@ -654,6 +676,7 @@ function viewWorkout() {
   const isRest = part === "휴식";
   const routine = store.workoutRoutine(part);
   const doneCount = isToday ? store.routineDoneToday() : (doneToday ? routine.length : 0);
+  const effDone = doneToday ? routine.length : doneCount;
   const week = store.startOfWeek();
   const weekDone = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(week); d.setDate(week.getDate() + i);
@@ -677,8 +700,8 @@ function viewWorkout() {
         <div style="font-size:40px;font-weight:800;padding:6px 0">${part}</div>
         ${isRest
           ? `<p class="timer-meta">예정된 휴식입니다</p>`
-          : `<p class="timer-meta">루틴 ${doneCount}/${routine.length} 완료</p>
-             <div class="bar" style="max-width:240px;margin:10px auto 0"><i style="width:${routine.length ? Math.round(doneCount / routine.length * 100) : 0}%"></i></div>`}
+          : `<p class="timer-meta">루틴 ${effDone}/${routine.length} 완료</p>
+             <div class="bar${doneToday ? " green" : ""}" style="max-width:240px;margin:10px auto 0"><i style="width:${routine.length ? Math.round(effDone / routine.length * 100) : 0}%"></i></div>`}
         <div class="timer-actions">
           ${!isToday ? "" : doneToday
             ? `<button class="btn" id="btn-workout-undo" style="min-width:170px">오늘 기록 취소</button>`
@@ -694,7 +717,7 @@ function viewWorkout() {
     <div class="card">
       <p class="card-title">오늘의 루틴</p>
       ${routine.map((ex, i) => `
-        <div class="row ${i < doneCount ? "done" : ""}" style="min-height:46px">
+        <div class="row ${i < effDone ? "done" : ""}" style="min-height:46px">
           <button class="check" tabindex="-1">${CHECK_SVG}</button>
           <div class="row-main">
             <div class="row-title" style="font-size:15px">${esc(ex)}</div>
@@ -702,14 +725,6 @@ function viewWorkout() {
           </div>
         </div>`).join("")}
     </div>` : ""}
-    <div class="card">
-      <p class="card-title">요일별 분할</p>
-      ${store.WEEKDAYS.map((w, i) => `
-        <div class="row" style="min-height:44px">
-          <div class="row-main"><div class="row-title" style="font-size:15px">${w}</div></div>
-          <span class="chip ${assign[i] === "휴식" ? "" : "accent"}">${assign[i]}</span>
-        </div>`).join("")}
-    </div>
     <div class="card">
       <p class="card-title">최근 기록</p>
       ${s.workout.history.slice(-8).reverse().map((h) => `
@@ -798,8 +813,8 @@ function viewStats() {
     <div class="card">
       <p class="card-title">${statsRange === "week" ? "이번 주" : "이번 달"} 요약</p>
       <div class="stat-grid">
-        <div class="stat-cell"><div class="v">${Math.round(weekMin / 60)}h</div><div class="k">자습 시간 (주 ${Math.round(goalMin / 60)}h 목표)</div></div>
-        <div class="stat-cell"><div class="v">${pct}%</div><div class="k">전체 강의 진도 (${stats.done}/${stats.total})</div></div>
+        <div class="stat-cell"><div class="v">${Math.round(weekMin / 60)}h</div><div class="k">자습 시간</div></div>
+        <div class="stat-cell"><div class="v">${pct}%</div><div class="k">전체 강의 진도</div></div>
         <div class="stat-cell"><div class="v">${sessions.length}</div><div class="k">자습 세션</div></div>
         <div class="stat-cell"><div class="v">${wkDone}</div><div class="k">운동 완료</div></div>
       </div>
@@ -820,7 +835,7 @@ function viewStats() {
           const r = Math.round(weekMin / goalMin * 100);
           const succMin = store.get().settings.successMin;
           const label = r >= 100 ? '<span class="chip green">완전 수행</span>' : r >= succMin ? '<span class="chip accent">성공</span>' : '<span class="chip red">미달</span>';
-          return `<p class="muted" style="padding:8px 0 0">판정: ${label} (성공 기준 ${succMin}%)</p>`;
+          return `<p class="muted" style="padding:8px 0 0">판정: ${label}</p>`;
         })()}
       </div>
     </div>
@@ -856,7 +871,7 @@ function dayToggles(days) {
 function openScheduleEdit() {
   const items = store.scheduleItems();
   openSheet(`
-    <h2>일정 항목 편집</h2>
+    <h2>일정 항목</h2>
     <p class="muted">반복 시간표를 수정합니다. 변경은 저장 즉시 반영되며, 체크 기록은 날짜별로 그대로 유지됩니다.</p>
     ${items.map((it) => `
       <div class="row">
@@ -963,7 +978,7 @@ function viewSettings() {
       <p class="card-title">일정 · 목표</p>
       <div class="row">
         <div class="row-main">
-          <div class="row-title">일정 항목 편집</div>
+          <div class="row-title">일정 항목</div>
         </div>
         <button class="btn" style="min-height:40px;padding:0 16px" id="btn-sched">편집</button>
       </div>
@@ -1098,6 +1113,7 @@ function viewSettings() {
         ${list.map((ex, i) => `
           <div class="swipe-wrap">
             <div class="row" style="min-height:46px" data-rt-swipe="${i}">
+              <button class="drag-handle" data-rt-drag="${i}" aria-label="순서 변경">${GRIP_SVG}</button>
               <div class="row-main"><div class="row-title" style="font-size:15px">${esc(ex)}</div></div>
             </div>
           </div>`).join("") || `<p class="muted">운동이 없습니다. 아래에서 추가하세요.</p>`}
@@ -1109,6 +1125,31 @@ function viewSettings() {
         makeSwipeable(row, () => {
           store.setRoutineItem(part, +row.dataset.rtSwipe, null);
           renderRoutine(sheet);
+        });
+      });
+      $$(".drag-handle", sheet).forEach((h) => {
+        h.addEventListener("pointerdown", (e) => {
+          e.preventDefault();
+          const wrap = h.closest(".swipe-wrap");
+          const wraps = [...$("#routine-body", sheet).querySelectorAll(":scope > .swipe-wrap")];
+          const from = wraps.indexOf(wrap);
+          const startY = e.clientY;
+          const step = wrap.offsetHeight + 6;
+          wrap.style.zIndex = "10";
+          wrap.style.transition = "none";
+          const mv = (ev) => { wrap.style.transform = `translateY(${ev.clientY - startY}px)`; };
+          const up = (ev) => {
+            window.removeEventListener("pointermove", mv);
+            window.removeEventListener("pointerup", up);
+            const shift = Math.round((ev.clientY - startY) / step);
+            const to = Math.max(0, Math.min(wraps.length - 1, from + shift));
+            wrap.style.transform = "";
+            wrap.style.zIndex = "";
+            wrap.style.transition = "";
+            if (to !== from) { store.reorderRoutine(part, from, to); renderRoutine(sheet); }
+          };
+          window.addEventListener("pointermove", mv);
+          window.addEventListener("pointerup", up);
         });
       });
       $("#rt-add", sheet).addEventListener("click", () => {
