@@ -345,11 +345,9 @@ function applyTheme() {
   root.classList.toggle("bw", !!bw);
   root.classList.toggle("theme-dark", theme === "dark");
   root.classList.toggle("theme-light", theme === "light");
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) {
-    const dark = theme === "dark" || (theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
-    meta.setAttribute("content", dark ? "#1C1C1E" : "#F76729");
-  }
+  const dark = theme === "dark" || (theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+  const metas = document.querySelectorAll('meta[name="theme-color"]');
+  metas.forEach((m) => m.setAttribute("content", dark ? "#1C1C1E" : "#F2F2F7"));
 }
 
 /* ── schedule notifications (foreground) ── */

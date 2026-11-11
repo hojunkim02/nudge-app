@@ -1,4 +1,4 @@
-const CACHE = "nudge-v3";
+const CACHE = "nudge-v4";
 const ASSETS = [
   "./",
   "./index.html",
