@@ -34,7 +34,7 @@ export function openSheet(html, onMount) {
     sh.style.transition = "transform .3s cubic-bezier(.32,.72,0,1)";
     sh.style.transform = "translateY(100%)";
     $(".sheet-backdrop", root).style.opacity = "0";
-    setTimeout(() => (root.innerHTML = ""), 300);
+    setTimeout(() => { root.innerHTML = ""; render(); }, 300);
   };
   $(".sheet-backdrop", root).addEventListener("click", close);
   if (onMount) onMount($(".sheet", root), close);
@@ -77,11 +77,29 @@ function viewToday() {
     return `<div class="day-dot ${k === key ? "today" : all ? "done" : ""}">${store.WEEKDAYS[d.getDay()]}</div>`;
   }).join("");
 
+  const pending = store.pendingSessions();
+  const pendingHtml = pending.length ? `
+    <div class="card">
+      <p class="card-title">확정 대기 ${pending.length}건</p>
+      ${pending.map((p) => `
+        <div class="row">
+          <div class="row-main">
+            <div class="row-title">${esc(p.label)}</div>
+            <div class="row-sub">${p.date} · 측정 ${p.measuredMin}분 · 미확정</div>
+          </div>
+          <button class="btn" style="min-height:38px;padding:0 14px;font-size:14px" data-finalize="${p.id}">확정</button>
+        </div>`).join("")}
+      <p class="muted">미확정 세션은 통계에 포함되지 않습니다.</p>
+    </div>` : "";
+
   const timerHtml = s.timer
     ? `<div class="timer">
         <div class="timer-time" id="timer-clock">…</div>
-        <p class="timer-meta">${esc(s.timer.label)} 측정 중</p>
+        <p class="timer-meta">${esc(s.timer.label)}${s.timer.pausedAt ? " · 일시정지" : " 측정 중"}${s.timer.kind === "extra" ? " (추가 자습)" : ""}</p>
         <div class="timer-actions">
+          ${s.timer.pausedAt
+            ? `<button class="btn" id="btn-resume">재개</button>`
+            : `<button class="btn" id="btn-pause">일시정지</button>`}
           <button class="btn primary" id="btn-stop">종료</button>
         </div>
       </div>`
@@ -90,6 +108,7 @@ function viewToday() {
         <p class="timer-meta">측정 중인 자습이 없습니다</p>
         <div class="timer-actions">
           <button class="btn primary" id="btn-start">자습 시작</button>
+          <button class="btn" id="btn-start-extra">추가 자습</button>
         </div>
       </div>`;
 
@@ -105,10 +124,11 @@ function viewToday() {
           ? `<span class="chip ${todayLunch === "yes" ? "accent" : ""}">${todayLunch === "yes" ? "예" : "아니오"}</span>`
           : `<div style="display:flex;gap:8px">
               <button class="btn" style="min-height:40px;padding:0 16px" id="lunch-no" ${store.lunchAvailable() ? "" : "disabled"}>아니오</button>
-              <button class="btn primary" style="min-height:40px;padding:0 16px" id="lunch-yes" ${store.lunchAvailable() ? "" : "disabled"}>예</button>
+              <button class="btn primary" style="min-height:40px;padding:0 16px" id="lunch-yes" ${store.lunchAvailable() && nowHM() < "11:50" ? "" : "disabled"}>예</button>
             </div>`}
       </div>
       ${!store.lunchAvailable() && !lunchDecided ? `<p class="muted">이번 주 '예' 3회를 모두 사용했습니다. 다음 주 월요일에 초기화됩니다.</p>` : ""}
+      ${store.lunchAvailable() && !lunchDecided && nowHM() >= "11:50" ? `<p class="muted">11:50이 지나 '예' 선택이 마감되었습니다. 미응답은 '아니오'로 기록됩니다.</p>` : ""}
     </div>` : "";
 
   viewEl.innerHTML = `
@@ -141,6 +161,7 @@ function viewToday() {
       <button class="btn danger block" id="btn-reset-day" style="margin:12px 0">오늘 체크 초기화</button>
     </div>
     ${lunchHtml}
+    ${pendingHtml}
     <div class="card">
       <p class="card-title">자습 타이머</p>
       ${timerHtml}
@@ -182,39 +203,56 @@ function viewToday() {
 
   const startBtn = $("#btn-start");
   if (startBtn) startBtn.addEventListener("click", () => {
-    const label = new Date().getHours() < 15 ? "오전 자습" : new Date().getDay() === 0 && new Date().getHours() >= 18 ? "저녁 자습" : "자습";
+    const h = new Date().getHours();
+    const label = h < 12 ? "오전 자습" : h < 15 ? "점심 자습" : h >= 18 ? "저녁 자습" : "자습";
     store.startTimer(label);
     render();
   });
 
   const stopBtn = $("#btn-stop");
   if (stopBtn) stopBtn.addEventListener("click", () => {
-    const t = store.get().timer;
-    const elapsed = Math.max(0, Math.round((Date.now() - t.start) / 60000));
-    openSheet(`
-      <h2>자습 종료</h2>
-      <p class="muted">측정된 시간은 ${fmtMin(elapsed)}입니다. 실제 공부시간을 조정하시겠습니까?</p>
-      <div class="field"><label>실제 공부시간 (분)</label><input type="number" id="adj-min" value="${elapsed}" min="0" max="720"></div>
-      <div class="field"><label>조정 사유 (선택)</label><input type="text" id="adj-reason" placeholder="예: 자리 비움"></div>
-      <button class="btn primary block" id="btn-confirm-stop">기록하고 종료</button>
-    `, (sheet, close) => {
-      $("#btn-confirm-stop", sheet).addEventListener("click", () => {
-        const v = parseInt($("#adj-min", sheet).value, 10);
-        const reason = $("#adj-reason", sheet).value.trim();
-        const s = store.stopTimer(isNaN(v) ? elapsed : Math.max(0, v));
-        if (reason && s && s.finalMin !== s.measuredMin) {
-          store.get().logs.push({ type: "time-correction", date: key, from: s.measuredMin, to: s.finalMin, reason, at: Date.now() });
-          store.save();
-        }
-        close();
-        render();
-        toast(`자습 ${s.finalMin}분 기록 완료`);
-      });
-    });
+    const elapsed = Math.round(store.timerElapsedSec() / 60);
+    const sess = store.stopTimer();
+    openAdjustSheet(sess, elapsed);
     startTimerTick();
   });
 
+  const pauseBtn = $("#btn-pause");
+  if (pauseBtn) pauseBtn.addEventListener("click", () => { store.pauseTimer(); render(); });
+  const resumeBtn = $("#btn-resume");
+  if (resumeBtn) resumeBtn.addEventListener("click", () => { store.resumeTimer(); render(); });
+
+  const extraBtn = $("#btn-start-extra");
+  if (extraBtn) extraBtn.addEventListener("click", () => {
+    store.startTimer("추가 자습", "extra");
+    render();
+  });
+
+  $$("[data-finalize]", viewEl).forEach((b) => b.addEventListener("click", () => {
+    const sess = store.get().sessions.find((x) => x.id === b.dataset.finalize);
+    openAdjustSheet(sess, sess.measuredMin);
+  }));
+
   startTimerTick();
+}
+
+function openAdjustSheet(sess, measured) {
+  openSheet(`
+    <h2>자습 종료</h2>
+    <p class="muted">측정된 시간은 ${fmtMin(measured)}입니다. 실제 공부시간을 조정하시겠습니까?</p>
+    <div class="field"><label>실제 공부시간 (분)</label><input type="number" id="adj-min" value="${measured}" min="0" max="720"></div>
+    <div class="field"><label>조정 사유 (선택)</label><input type="text" id="adj-reason" placeholder="예: 자리 비움"></div>
+    <button class="btn primary block" id="btn-confirm-stop">기록하고 종료</button>
+  `, (sheet, close) => {
+    $("#btn-confirm-stop", sheet).addEventListener("click", () => {
+      const v = parseInt($("#adj-min", sheet).value, 10);
+      const reason = $("#adj-reason", sheet).value.trim();
+      const s = store.finalizeSession(sess.id, isNaN(v) ? measured : Math.max(0, v), reason);
+      close();
+      render();
+      toast(`자습 ${s.finalMin}분 확정 완료`);
+    });
+  });
 }
 
 let tickTimer = null;
@@ -224,7 +262,7 @@ function startTimerTick() {
     const t = store.get().timer;
     const el = $("#timer-clock");
     if (!t || !el) { clearInterval(tickTimer); return; }
-    const sec = Math.floor((Date.now() - t.start) / 1000);
+    const sec = store.timerElapsedSec();
     const p = (n) => String(n).padStart(2, "0");
     el.textContent = `${p(Math.floor(sec / 60))}:${p(sec % 60)}`;
   }, 500);
@@ -238,19 +276,28 @@ function viewStudy() {
   const todayGoal = s.goal.daily;
 
   const STATUS_CHIP = { "미학습": "", "복습 필요": "red", "완료": "green" };
+  const origGoal = 10;
+  const doneToday = store.lecturesDoneOn(store.dateKey());
+  const goalPct = Math.min(100, Math.round((doneToday / Math.max(1, todayGoal)) * 100));
+  const origPct = Math.min(100, Math.round((doneToday / origGoal) * 100));
+  const waived = todayGoal === 0;
 
   viewEl.innerHTML = `
     <div class="card">
       <p class="card-title">오늘의 목표</p>
       <div class="row">
         <div class="row-main">
-          <div class="row-title">강의 ${todayGoal}강</div>
-          <div class="row-sub">복무 중 기본 학습 목표 · 필요 시 조정</div>
+          <div class="row-title">강의 ${todayGoal}강 ${waived ? '<span class="chip red" style="margin-left:6px">면제</span>' : ""}</div>
+          <div class="row-sub">복무 중 기본 학습 목표 · 업무지시 시에만 당일 0~10강 조정</div>
         </div>
         <button class="btn" style="min-height:40px;padding:0 16px" id="btn-adjust">조정</button>
       </div>
-      <div style="padding:6px 0 14px"><div class="bar"><i style="width:${pct}%"></i></div>
-      <p class="muted" style="padding-top:6px">전체 진도 ${stats.done}/${stats.total}강 (${pct}%)</p></div>
+      <div style="padding:6px 0 14px">
+        <div class="bar"><i style="width:${waived ? 0 : goalPct}%"></i></div>
+        <p class="muted" style="padding-top:6px">오늘 ${doneToday}강 완료 · ${waived ? "업무로 인한 목표 면제" : `원 목표 대비 ${origPct}% · 조정 목표(${todayGoal}강) 대비 ${goalPct}%`}</p>
+        <div class="bar" style="margin-top:8px"><i style="width:${pct}%"></i></div>
+        <p class="muted" style="padding-top:6px">전체 진도 ${stats.done}/${stats.total}강 (${pct}%)</p>
+      </div>
     </div>
     <div class="card">
       <p class="card-title">과목 · 강의</p>
@@ -409,23 +456,33 @@ function viewWorkout() {
       <p class="card-title">오늘의 운동 · ${store.WORKOUT_CYCLE[s.workout.index % 5]}day</p>
       <div class="timer">
         <div style="font-size:44px;font-weight:800;padding:8px 0">${part}</div>
-        <p class="timer-meta">${doneToday ? "오늘 운동 완료 ✓ 다음은 " + store.WORKOUT_CYCLE[(s.workout.index + 1) % 5] : "순서: 등 → 가슴 → 어깨 → 팔 → 하체"}</p>
+        <p class="timer-meta">${doneToday ? "오늘 완료 ✓ 다음은 " + store.WORKOUT_CYCLE[(s.workout.index + 1) % 5] : "순서: 등 → 가슴 → 어깨 → 팔 → 하체"}</p>
         <div class="timer-actions">
           ${doneToday
             ? `<span class="chip green" style="min-height:44px;padding:0 20px">완료</span>`
-            : `<button class="btn primary" id="btn-workout-done" style="min-width:180px">운동 완료</button>`}
+            : `<button class="btn primary" id="btn-workout-done" style="min-width:150px">운동 완료</button>
+               <button class="btn" id="btn-workout-rest" style="min-width:150px">휴식으로 기록</button>`}
         </div>
       </div>
       <div class="week-strip">
         ${store.WEEKDAYS.map((w, i) => `<div class="day-dot ${weekDone[i] ? "done" : ""}">${w}</div>`).join("")}
       </div>
-      <p class="muted" style="padding:0 4px 12px">이번 주 ${doneCount}회 완료 · 운동을 못 한 날은 같은 종목이 다음 날로 이월됩니다</p>
+      <p class="muted" style="padding:0 4px 4px">이번 주 ${doneCount}회 완료 · 운동을 못 한 날은 같은 종목이 다음 날로 이월되고, 예정된 휴식은 정상 수행으로 기록됩니다</p>
+      <div class="row" style="border-top:0.5px solid var(--sep)">
+        <div class="row-main">
+          <div class="row-title" style="font-size:15px">현재 단계 설정</div>
+          <div class="row-sub">초기 기준: 2026-11-11(수) 어깨</div>
+        </div>
+        <div class="segment" style="margin:0;width:230px">
+          ${store.WORKOUT_CYCLE.map((w, i) => `<button class="${i === s.workout.index % 5 ? "active" : ""}" data-setpart="${i}">${w}</button>`).join("")}
+        </div>
+      </div>
     </div>
     <div class="card">
       <p class="card-title">최근 기록</p>
       ${s.workout.history.slice(-8).reverse().map((h) => `
         <div class="row"><div class="row-main">
-          <div class="row-title">${esc(h.part)}</div>
+          <div class="row-title">${esc(h.part)}${h.rest ? " (예정된 휴식)" : ""}</div>
           <div class="row-sub">${h.date}</div>
         </div><span class="chip green">완료</span></div>`).join("") || `<p class="muted">아직 기록이 없습니다.</p>`}
     </div>
@@ -439,37 +496,66 @@ function viewWorkout() {
     render();
     toast(`${p} 운동 완료!`);
   });
+  $("#btn-workout-rest")?.addEventListener("click", () => {
+    store.completeWorkout(true);
+    render();
+    toast("예정된 휴식으로 기록했습니다");
+  });
+  $$("[data-setpart]", viewEl).forEach((b) => b.addEventListener("click", () => {
+    store.setWorkoutIndex(parseInt(b.dataset.setpart, 10));
+    render();
+    toast(`현재 단계를 ${store.todayWorkout()}로 설정했습니다`);
+  }));
 }
 
 /* ═════════ VIEW: STATS ═════════ */
+let statsRange = "week";
 function viewStats() {
   const week = store.startOfWeek();
-  const fromKey = store.dateKey(week);
-  const toKey = store.dateKey(new Date(week.getTime() + 6 * 864e5));
+  let from, to, days;
+  if (statsRange === "month") {
+    from = new Date(); from.setDate(1); from.setHours(0, 0, 0, 0);
+    to = new Date(from.getFullYear(), from.getMonth() + 1, 0);
+    days = to.getDate();
+  } else {
+    from = week;
+    to = new Date(week.getTime() + 6 * 864e5);
+    days = 7;
+  }
+  const fromKey = store.dateKey(from);
+  const toKey = store.dateKey(to);
   const sessions = store.sessionsInRange(fromKey, toKey);
   const weekMin = sessions.reduce((a, x) => a + x.finalMin, 0);
   const stats = store.lectureStats();
-  const goalMin = 18 * 60;
+  const goalMin = 18 * 60 * Math.ceil(days / 7);
   const pct = stats.total ? Math.round((stats.done / stats.total) * 100) : 0;
-  const wkDone = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(week); d.setDate(week.getDate() + i);
+  const wkDone = Array.from({ length: days }, (_, i) => {
+    const d = new Date(from); d.setDate(from.getDate() + i);
     return store.workoutDoneOn(store.dateKey(d));
   }).filter(Boolean).length;
 
-  const bars = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(week); d.setDate(week.getDate() + i);
+  const bars = Array.from({ length: days }, (_, i) => {
+    const d = new Date(from); d.setDate(from.getDate() + i);
     const k = store.dateKey(d);
-    const m = store.minutesOn(k);
-    const h = Math.min(100, (m / 240) * 100);
+    const { reg, extra } = store.minutesOnSplit(k);
+    const rh = Math.min(100, (reg / 240) * 100);
+    const eh = Math.min(100, (extra / 240) * 100);
     return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px">
-      <div class="bar" style="flex:1;width:100%;display:flex;align-items:flex-end"><i style="width:100%;height:${h}%;border-radius:4px 4px 0 0"></i></div>
-      <span style="font-size:11px;font-weight:700;color:var(--fg-secondary)">${store.WEEKDAYS[d.getDay()]}</span>
+      <div class="bar" style="flex:1;width:100%;display:flex;align-items:flex-end;position:relative">
+        <i style="width:100%;height:${eh}%;border-radius:4px 4px 0 0;background:var(--success);position:absolute;bottom:0;left:0"></i>
+        <i style="width:100%;height:${rh}%;border-radius:4px 4px 0 0;position:relative;z-index:1;opacity:${rh ? 1 : 0}"></i>
+      </div>
+      <span style="font-size:11px;font-weight:700;color:var(--fg-secondary)">${d.getDate()}</span>
     </div>`;
   }).join("");
 
   viewEl.innerHTML = `
+    <div class="segment">
+      <button class="${statsRange === "week" ? "active" : ""}" id="seg-week">주간</button>
+      <button class="${statsRange === "month" ? "active" : ""}" id="seg-month">월간</button>
+    </div>
     <div class="card">
-      <p class="card-title">이번 주 요약</p>
+      <p class="card-title">${statsRange === "week" ? "이번 주" : "이번 달"} 요약</p>
       <div class="stat-grid">
         <div class="stat-cell"><div class="v">${Math.round(weekMin / 60)}h</div><div class="k">자습 시간 (주 ${Math.round(goalMin / 60)}h 목표)</div></div>
         <div class="stat-cell"><div class="v">${pct}%</div><div class="k">전체 강의 진도 (${stats.done}/${stats.total})</div></div>
@@ -478,12 +564,12 @@ function viewStats() {
       </div>
     </div>
     <div class="card">
-      <p class="card-title">요일별 자습 시간</p>
-      <div style="display:flex;gap:8px;height:150px;padding:14px 0">${bars}</div>
-      <p class="muted" style="padding:0 4px 12px">막대는 하루 4시간 기준입니다. 미래 날짜는 실패로 계산하지 않습니다.</p>
+      <p class="card-title">날짜별 자습 시간</p>
+      <div style="display:flex;gap:4px;height:150px;padding:14px 0">${bars}</div>
+      <p class="muted" style="padding:0 4px 12px">막대는 하루 4시간 기준 · 주황 정규 자습, 초록 추가 자습 · 미확정 세션은 제외되며 미래 날짜는 실패로 계산하지 않습니다.</p>
     </div>
     <div class="card">
-      <p class="card-title">주간 성취율</p>
+      <p class="card-title">${statsRange === "week" ? "주간" : "월간"} 성취율</p>
       <div style="padding:12px 4px 16px">
         <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;margin-bottom:8px">
           <span>정규 자습 목표</span><span>${Math.min(100, Math.round(weekMin / goalMin * 100))}%</span>
@@ -494,7 +580,9 @@ function viewStats() {
   `;
 
   titleEl.textContent = "통계";
-  subEl.textContent = "한 주를 한눈에";
+  subEl.textContent = statsRange === "week" ? "한 주를 한눈에" : "이번 달을 한눈에";
+  $("#seg-week").addEventListener("click", () => { statsRange = "week"; render(); });
+  $("#seg-month").addEventListener("click", () => { statsRange = "month"; render(); });
 }
 
 /* ═════════ VIEW: SETTINGS ═════════ */

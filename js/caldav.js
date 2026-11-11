@@ -1,7 +1,7 @@
 // Minimal CalDAV client for iCloud (best-effort from the browser).
 // iCloud does not send CORS headers for CalDAV endpoints, so requests from a
 // github.io origin may be blocked by the browser. Errors are surfaced clearly.
-import { get, save, dateKey, exportJSON } from "./store.js";
+import { get, save, dateKey } from "./store.js";
 
 function authHeader() {
   const { caldavUser, caldavPass } = get().settings;
@@ -63,7 +63,7 @@ export async function sync() {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 7);
   const ck = dateKey(cutoff);
-  const pending = st.sessions.filter((s) => s.date >= ck && !st.settings.caldavUids[s.id]);
+  const pending = st.sessions.filter((s) => s.date >= ck && s.status === "finalized" && !st.settings.caldavUids[s.id]);
   if (!pending.length) return { pushed: 0 };
   // iCloud requires a per-event path; we PUT directly to the user's calendar
   // home derived from the principal. Without CORS, this will throw — caught in UI.
