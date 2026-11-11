@@ -4,7 +4,7 @@ const SCHEMA = 1;
 
 export const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-export const CHECKS = [
+export const DEFAULT_SCHEDULE = [
   { id: "wake", title: "기상 · 아침 준비 · 이동", time: "06:00–06:50", days: [1, 2, 3, 4, 5] },
   { id: "morning", title: "오전 자습 120분", time: "06:50–08:50", days: [1, 2, 3, 4, 5] },
   { id: "work", title: "복무 · 허용 시간 강의", time: "09:00–18:00", days: [1, 2, 3, 4, 5] },
@@ -23,6 +23,8 @@ function defaultState() {
   return {
     schema: SCHEMA,
     created: Date.now(),
+    schedule: DEFAULT_SCHEDULE.map((c) => ({ ...c })),
+    goalBase: 10,
     checks: {},            // { "YYYY-MM-DD": { [checkId]: true } }
     lunch: {},             // { "YYYY-MM-DD": "yes" | "no" }
     sessions: [],          // study sessions { id, date, label, start, end, measuredMin, finalMin }
@@ -31,6 +33,7 @@ function defaultState() {
     goal: { daily: 10, adjustedToday: null, adjustLog: [] },
     workout: { index: 0, history: [] }, // history: { date, part, done }
     settings: {
+      bw: false,
       caldavEnabled: false,
       caldavUrl: "https://caldav.icloud.com",
       caldavUser: "",
@@ -50,7 +53,10 @@ function load() {
     if (!raw) return defaultState();
     const data = JSON.parse(raw);
     const base = defaultState();
-    return { ...base, ...data, settings: { ...base.settings, ...(data.settings || {}) }, goal: { ...base.goal, ...(data.goal || {}) }, workout: { ...base.workout, ...(data.workout || {}) } };
+    const st = { ...base, ...data, settings: { ...base.settings, ...(data.settings || {}) }, goal: { ...base.goal, ...(data.goal || {}) }, workout: { ...base.workout, ...(data.workout || {}) } };
+    if (!Array.isArray(st.schedule) || !st.schedule.length) st.schedule = base.schedule;
+    if (typeof st.goalBase !== "number") st.goalBase = 10;
+    return st;
   } catch {
     return defaultState();
   }
@@ -90,7 +96,28 @@ export function fmtDate(d) {
 /* ── daily checklist ───────────────────── */
 export function checksForDate(d = new Date()) {
   const dow = d.getDay();
-  return CHECKS.filter((c) => c.days.includes(dow));
+  return state.schedule.filter((c) => c.days.includes(dow));
+}
+export function scheduleItems() {
+  return state.schedule;
+}
+export function updateScheduleItem(id, patch) {
+  const it = state.schedule.find((c) => c.id === id);
+  if (!it) return;
+  Object.assign(it, patch);
+  save();
+}
+export function addScheduleItem({ title, time, days }) {
+  state.schedule.push({ id: crypto.randomUUID(), title, time, days, optional: false });
+  save();
+}
+export function deleteScheduleItem(id) {
+  state.schedule = state.schedule.filter((c) => c.id !== id);
+  save();
+}
+export function setGoalBase(n) {
+  state.goalBase = Math.max(0, Math.min(20, n));
+  save();
 }
 export function dayChecks(key = dateKey()) {
   return state.checks[key] || {};
@@ -218,6 +245,40 @@ export function addSubject(name) {
   state.subjects.push({ id: crypto.randomUUID(), name, chapters: [] });
   save();
 }
+export function renameSubject(id, name) {
+  const s = state.subjects.find((x) => x.id === id);
+  if (s) { s.name = name; save(); }
+}
+export function deleteSubject(id) {
+  state.subjects = state.subjects.filter((x) => x.id !== id);
+  save();
+}
+export function renameChapter(id, name) {
+  for (const s of state.subjects) {
+    const c = s.chapters.find((x) => x.id === id);
+    if (c) { c.name = name; save(); return; }
+  }
+}
+export function deleteChapter(id) {
+  for (const s of state.subjects) {
+    const n = s.chapters.length;
+    s.chapters = s.chapters.filter((x) => x.id !== id);
+    if (s.chapters.length !== n) { save(); return; }
+  }
+}
+export function renameLecture(id, name) {
+  for (const s of state.subjects) for (const c of s.chapters) {
+    const l = c.lectures.find((x) => x.id === id);
+    if (l) { l.name = name; save(); return; }
+  }
+}
+export function deleteLecture(id) {
+  for (const s of state.subjects) for (const c of s.chapters) {
+    const n = c.lectures.length;
+    c.lectures = c.lectures.filter((x) => x.id !== id);
+    if (c.lectures.length !== n) { save(); return; }
+  }
+}
 export function addChapter(subjectId, name) {
   const s = state.subjects.find((x) => x.id === subjectId);
   if (!s) return;
@@ -285,6 +346,18 @@ export function setWorkoutIndex(i) {
 }
 export function workoutDoneOn(key) {
   return state.workout.history.some((h) => h.date === key && h.done);
+}
+export function undoWorkoutToday() {
+  const key = dateKey();
+  const idx = state.workout.history.findIndex((h) => h.date === key);
+  if (idx === -1) return false;
+  state.workout.history.splice(idx, 1);
+  state.workout.index = (state.workout.index - 1 + WORKOUT_CYCLE.length) % WORKOUT_CYCLE.length;
+  save();
+  return true;
+}
+export function workoutOn(key) {
+  return state.workout.history.find((h) => h.date === key && h.done) || null;
 }
 
 /* ── backup / restore ──────────────────── */

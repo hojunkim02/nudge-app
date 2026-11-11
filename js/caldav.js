@@ -37,6 +37,35 @@ function icsDate(d) {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
 }
 
+function parseHHMM(str) {
+  const m = str.match(/(\d{1,2}):(\d{2})/g);
+  if (!m || !m[0]) return null;
+  return m[0].split(":").map(Number);
+}
+
+function scheduleEvent(item, dateStr) {
+  const st = parseHHMM(item.time);
+  const [sh, sm] = st || [9, 0];
+  const [eh, em] = (st && parseHHMM(item.time.split("[-–~]")[1] || "")) || [sh + 1, sm];
+  const d = new Date(dateStr + "T00:00:00");
+  const start = new Date(d); start.setHours(sh, sm, 0, 0);
+  const end = new Date(d); end.setHours(eh, em, 0, 0);
+  const uid = `nudge-sched-${dateStr}-${item.id}@nudge-app`;
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Nudge//KO",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTAMP:${icsDate(new Date())}`,
+    `DTSTART:${icsDate(start)}`,
+    `DTEND:${icsDate(end)}`,
+    `SUMMARY:🗓 ${item.title}`,
+    "END:VEVENT",
+    "END:VCALENDAR"
+  ].join("\r\n");
+}
+
 function sessionEvent(s) {
   const start = new Date(s.start);
   const end = new Date(s.end);
@@ -64,7 +93,9 @@ export async function sync() {
   cutoff.setDate(cutoff.getDate() - 7);
   const ck = dateKey(cutoff);
   const pending = st.sessions.filter((s) => s.date >= ck && s.status === "finalized" && !st.settings.caldavUids[s.id]);
-  if (!pending.length) return { pushed: 0 };
+  const todayKey = dateKey(new Date());
+  const schedPending = get().schedule.filter((it) => it.days.includes(new Date().getDay()) && !st.settings.caldavUids[`sched-${todayKey}-${it.id}`]);
+  if (!pending.length && !schedPending.length) return { pushed: 0 };
   // iCloud requires a per-event path; we PUT directly to the user's calendar
   // home derived from the principal. Without CORS, this will throw — caught in UI.
   const base = caldavUrl.replace(/\/$/, "");
@@ -73,6 +104,13 @@ export async function sync() {
     const path = `${base}/${st.settings.caldavUser}/${s.id}.ics`;
     await caldavFetch("PUT", path, sessionEvent(s), "text/calendar");
     st.settings.caldavUids[s.id] = true;
+    pushed++;
+  }
+  for (const it of schedPending) {
+    const uidKey = `sched-${todayKey}-${it.id}`;
+    const path = `${base}/${st.settings.caldavUser}/nudge-${todayKey}-${it.id}.ics`;
+    await caldavFetch("PUT", path, scheduleEvent(it, todayKey), "text/calendar");
+    st.settings.caldavUids[uidKey] = true;
     pushed++;
   }
   st.settings.caldavLastSync = new Date().toISOString();

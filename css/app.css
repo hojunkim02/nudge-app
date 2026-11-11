@@ -2,6 +2,9 @@
 :root {
   --accent: #F76729;
   --accent-pressed: #D5541D;
+  --accent-rgb: 247, 103, 41;
+  --success-rgb: 52, 199, 89;
+  --danger-rgb: 255, 59, 48;
   --bg: #F2F2F7;
   --bg-elevated: #FFFFFF;
   --bg-secondary: #E9E9EF;
@@ -16,6 +19,15 @@
   --spring: cubic-bezier(0.32, 0.72, 0, 1);
   --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
+html.bw {
+  --accent: #3A3A3C;
+  --accent-pressed: #2C2C2E;
+  --accent-rgb: 58, 58, 60;
+  --success: #8E8E93;
+  --success-rgb: 142, 142, 147;
+  --danger: #8E8E93;
+  --danger-rgb: 142, 142, 147;
+}
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #000000;
@@ -25,6 +37,15 @@
     --fg-secondary: #9C9CA4;
     --fg-tertiary: #63636B;
     --sep: rgba(84, 84, 88, 0.4);
+  }
+  html.bw {
+    --accent: #F2F2F7;
+    --accent-pressed: #E5E5EA;
+    --accent-rgb: 242, 242, 247;
+    --success: #AEAEB2;
+    --success-rgb: 174, 174, 178;
+    --danger: #AEAEB2;
+    --danger-rgb: 174, 174, 178;
   }
 }
 
@@ -76,11 +97,6 @@ body {
 .view {
   flex: 1;
   padding: 8px 16px calc(env(safe-area-inset-bottom, 0px) + var(--tab-h) + 28px);
-}
-.view.enter { animation: viewIn 0.38s var(--spring) both; }
-@keyframes viewIn {
-  from { opacity: 0; transform: translateY(14px) scale(0.985); }
-  to { opacity: 1; transform: none; }
 }
 
 /* ── Cards & lists (Fluent iOS grouping) ── */
@@ -139,7 +155,7 @@ button {
 .btn.primary {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(247, 103, 41, 0.35);
+  box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.35);
 }
 .btn.danger { color: var(--danger); }
 .btn.block { width: 100%; }
@@ -253,9 +269,9 @@ button {
   background: var(--bg-secondary);
   color: var(--fg-secondary);
 }
-.chip.accent { background: rgba(247, 103, 41, 0.14); color: var(--accent); }
-.chip.green { background: rgba(52, 199, 89, 0.15); color: var(--success); }
-.chip.red { background: rgba(255, 59, 48, 0.12); color: var(--danger); }
+.chip.accent { background: rgba(var(--accent-rgb), 0.14); color: var(--accent); }
+.chip.green { background: rgba(var(--success-rgb), 0.15); color: var(--success); }
+.chip.red { background: rgba(var(--danger-rgb), 0.12); color: var(--danger); }
 
 /* ── Tab bar (iOS blurred) ─────────────── */
 .tabbar {
@@ -395,7 +411,9 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
   color: var(--fg-secondary);
 }
 .day-dot.today { background: var(--accent); color: #fff; }
-.day-dot.done { background: rgba(52, 199, 89, 0.18); color: var(--success); }
+.day-dot.done { background: rgba(var(--success-rgb), 0.18); color: var(--success); }
+.day-dot { border: none; font: inherit; width: 100%; transition: transform 0.15s var(--spring); }
+.day-dot:active { transform: scale(0.9); }
 .stepper { display: flex; align-items: center; gap: 14px; }
 .stepper button {
   width: 44px; height: 44px;

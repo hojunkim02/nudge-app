@@ -30,11 +30,8 @@ export function openSheet(html, onMount) {
   const root = $("#sheet-root");
   root.innerHTML = `<div class="sheet-backdrop"></div><div class="sheet" role="dialog"><div class="grabber"></div>${html}</div>`;
   const close = () => {
-    const sh = $(".sheet", root);
-    sh.style.transition = "transform .3s cubic-bezier(.32,.72,0,1)";
-    sh.style.transform = "translateY(100%)";
-    $(".sheet-backdrop", root).style.opacity = "0";
-    setTimeout(() => { root.innerHTML = ""; render(); }, 300);
+    root.innerHTML = "";
+    render();
   };
   $(".sheet-backdrop", root).addEventListener("click", close);
   if (onMount) onMount($(".sheet", root), close);
@@ -51,15 +48,19 @@ const nowHM = () => {
 };
 
 /* ═════════ VIEW: TODAY ═════════ */
+let selDay = null;
+
 function viewToday() {
   const s = store.get();
-  const key = store.dateKey();
-  const checks = store.checksForDate();
-  const done = store.dayChecks();
+  const todayKey = store.dateKey();
+  const key = selDay || todayKey;
+  const isToday = key === todayKey;
+  const selDate = new Date(key + "T00:00:00");
+  const checks = store.checksForDate(selDate);
+  const done = store.dayChecks(key);
   const doneCount = checks.filter((c) => done[c.id]).length;
-  const pct = Math.round((doneCount / checks.length) * 100);
+  const pct = checks.length ? Math.round((doneCount / checks.length) * 100) : 0;
   const todayMin = store.minutesOn(key);
-  const dow = new Date().getDay();
 
   const todayLunch = s.lunch[key];
   const lunchCheck = checks.find((c) => c.id === "lunch");
@@ -74,7 +75,7 @@ function viewToday() {
     const cs = store.checksForDate(d);
     const dn = store.dayChecks(k);
     const all = cs.length && cs.every((c) => dn[c.id] || (c.optional && s.lunch[k] === "no"));
-    return `<div class="day-dot ${k === key ? "today" : all ? "done" : ""}">${store.WEEKDAYS[d.getDay()]}</div>`;
+    return `<button class="day-dot ${k === key ? "today" : all ? "done" : ""}" data-day="${k}">${store.WEEKDAYS[d.getDay()]}</button>`;
   }).join("");
 
   const pending = store.pendingSessions();
@@ -112,7 +113,7 @@ function viewToday() {
         </div>
       </div>`;
 
-  const lunchHtml = lunchCheck ? `
+  const lunchHtml = (lunchCheck && isToday) ? `
     <div class="card">
       <p class="card-title">점심 자습 · 이번 주 예 ${lunchYes}/3</p>
       <div class="row">
@@ -143,39 +144,41 @@ function viewToday() {
           <div class="ring-label"><div>${pct}%<small>${doneCount}/${checks.length} 완료</small></div></div>
         </div>
         <div>
-          <div style="font-size:16px;font-weight:700">${store.fmtDate(new Date())}</div>
-          <p class="muted" style="padding:4px 0 0">오늘 자습 ${fmtMin(todayMin)}</p>
+          <div style="font-size:16px;font-weight:700">${store.fmtDate(selDate)}${isToday ? "" : ' <span class="chip" style="margin-left:4px">열람</span>'}</div>
+          <p class="muted" style="padding:4px 0 0">자습 ${fmtMin(todayMin)}</p>
         </div>
       </div>
     </div>
     <div class="card">
-      <p class="card-title">오늘의 일정</p>
+      <p class="card-title">${isToday ? "오늘의 일정" : "일정"} · 요일을 눌러 이동</p>
       ${checks.map((c) => `
-        <div class="row ${done[c.id] ? "done" : ""}" data-check="${c.id}" ${lunchCheck && c.id === "lunch" && lunchCheck.hidden ? 'style="display:none"' : ""}>
+        <div class="row ${done[c.id] ? "done" : ""}" data-check="${c.id}" data-date="${key}" ${lunchCheck && c.id === "lunch" && lunchCheck.hidden ? 'style="display:none"' : ""}>
           <button class="check" aria-label="${esc(c.title)} 완료">${CHECK_SVG}</button>
           <div class="row-main">
             <div class="row-title">${esc(c.title)}</div>
             <div class="row-sub">${c.time}</div>
           </div>
-        </div>`).join("")}
-      <button class="btn danger block" id="btn-reset-day" style="margin:12px 0">오늘 체크 초기화</button>
+        </div>`).join("") || `<p class="muted">이 요일에는 일정 항목이 없습니다. 설정 → 일정 항목 편집에서 추가할 수 있습니다.</p>`}
+      <button class="btn danger block" id="btn-reset-day" style="margin:12px 0">이 날짜 체크 초기화</button>
     </div>
     ${lunchHtml}
-    ${pendingHtml}
-    <div class="card">
-      <p class="card-title">자습 타이머</p>
-      ${timerHtml}
-    </div>
+    ${isToday ? pendingHtml : ""}
+    ${isToday ? `<div class="card"><p class="card-title">자습 타이머</p>${timerHtml}</div>` : ""}
   `;
 
   titleEl.textContent = "오늘";
-  subEl.textContent = "하루를 조금씩 밀어보세요";
+  subEl.textContent = isToday ? "하루를 조금씩 밀어보세요" : `${store.fmtDate(selDate)} 열람 중`;
+
+  $$("[data-day]").forEach((b) => b.addEventListener("click", () => {
+    selDay = b.dataset.day === todayKey ? null : b.dataset.day;
+    render();
+  }));
 
   $$("[data-check]").forEach((row) => {
     row.addEventListener("click", () => {
       const on = store.toggleCheck(key, row.dataset.check);
       row.classList.toggle("done", on);
-      const pct2 = Math.round((checks.filter((c) => (c.id === row.dataset.check ? on : !!store.dayChecks()[c.id])).length / checks.length) * 100);
+      const pct2 = Math.round((checks.filter((c) => (c.id === row.dataset.check ? on : !!store.dayChecks(key)[c.id])).length / Math.max(1, checks.length)) * 100);
       const ring = $(".ring .fill", viewEl);
       if (ring) ring.style.strokeDashoffset = 295.3 * (1 - pct2 / 100);
       $(".ring-label > div", viewEl).childNodes[0].textContent = pct2 + "%";
@@ -185,7 +188,7 @@ function viewToday() {
   $("#btn-reset-day")?.addEventListener("click", () => {
     store.resetDay(key);
     render();
-    toast("오늘의 체크를 초기화했습니다");
+    toast("체크를 초기화했습니다");
   });
 
   $("#lunch-yes")?.addEventListener("click", () => {
@@ -249,7 +252,6 @@ function openAdjustSheet(sess, measured) {
       const reason = $("#adj-reason", sheet).value.trim();
       const s = store.finalizeSession(sess.id, isNaN(v) ? measured : Math.max(0, v), reason);
       close();
-      render();
       toast(`자습 ${s.finalMin}분 확정 완료`);
     });
   });
@@ -276,7 +278,7 @@ function viewStudy() {
   const todayGoal = s.goal.daily;
 
   const STATUS_CHIP = { "미학습": "", "복습 필요": "red", "완료": "green" };
-  const origGoal = 10;
+  const origGoal = s.goalBase;
   const doneToday = store.lecturesDoneOn(store.dateKey());
   const goalPct = Math.min(100, Math.round((doneToday / Math.max(1, todayGoal)) * 100));
   const origPct = Math.min(100, Math.round((doneToday / origGoal) * 100));
@@ -288,7 +290,7 @@ function viewStudy() {
       <div class="row">
         <div class="row-main">
           <div class="row-title">강의 ${todayGoal}강 ${waived ? '<span class="chip red" style="margin-left:6px">면제</span>' : ""}</div>
-          <div class="row-sub">복무 중 기본 학습 목표 · 업무지시 시에만 당일 0~10강 조정</div>
+          <div class="row-sub">복무 중 기본 학습 목표 · 업무지시 시에만 당일 0~${origGoal}강 조정</div>
         </div>
         <button class="btn" style="min-height:40px;padding:0 16px" id="btn-adjust">조정</button>
       </div>
@@ -329,12 +331,14 @@ function viewStudy() {
           <div class="row-title">${esc(sub.name)}</div>
           <div class="row-sub">${sub.chapters.reduce((a, c) => a + c.lectures.length, 0)}강</div>
         </div>
+        <button class="btn" style="min-height:38px;padding:0 12px;font-size:15px" data-edit-subject="${sub.id}">⋯</button>
         <button class="btn" style="min-height:38px;padding:0 14px;font-size:14px" data-add-chapter="${sub.id}">챕터 +</button>
       </div>
       ${sub.chapters.map((ch) => `
         <div style="padding-left:14px">
           <div class="row">
             <div class="row-main"><div class="row-title" style="font-size:14px">${esc(ch.name)}</div></div>
+            <button class="btn" style="min-height:34px;padding:0 10px;font-size:14px" data-edit-chapter="${ch.id}">⋯</button>
             <button class="btn" style="min-height:34px;padding:0 12px;font-size:13px" data-add-lecture="${ch.id}">강의 +</button>
           </div>
           ${ch.lectures.map((l) => `
@@ -343,6 +347,7 @@ function viewStudy() {
               <div class="row-main">
                 <div class="row-title" style="font-size:14px;${l.status === "완료" ? "color:var(--fg-secondary);text-decoration:line-through" : ""}">${esc(l.name)}</div>
               </div>
+              <button class="btn" style="min-height:32px;padding:0 10px;font-size:14px;color:var(--fg-secondary)" data-edit-lecture="${l.id}">⋯</button>
               <button class="chip ${STATUS_CHIP[l.status]}" data-cycle="${l.id}" style="border:none">${esc(l.status)}</button>
             </div>`).join("")}
         </div>`).join("")}`;
@@ -362,6 +367,73 @@ function viewStudy() {
     for (const sub of s.subjects) for (const ch of sub.chapters) for (const l of ch.lectures) if (l.id === id) return l.name;
     return "";
   }
+
+  $$("[data-edit-subject]", viewEl).forEach((b) => b.addEventListener("click", () => {
+    const sub = s.subjects.find((x) => x.id === b.dataset.editSubject);
+    openSheet(`
+      <h2>과목 편집</h2>
+      <div class="field"><label>과목명</label><input type="text" id="es-name" value="${esc(sub.name)}"></div>
+      <button class="btn primary block" id="es-save">이름 저장</button>
+      <button class="btn danger block" id="es-del" style="margin-top:10px">과목 삭제</button>
+    `, (sheet, close) => {
+      $("#es-save", sheet).addEventListener("click", () => {
+        const v = $("#es-name", sheet).value.trim();
+        if (v) store.renameSubject(sub.id, v);
+        close();
+      });
+      $("#es-del", sheet).addEventListener("click", () => {
+        store.deleteSubject(sub.id);
+        close();
+        toast("과목을 삭제했습니다");
+      });
+    });
+  }));
+
+  $$("[data-edit-chapter]", viewEl).forEach((b) => b.addEventListener("click", () => {
+    let ch = null;
+    for (const sub of s.subjects) { const f = sub.chapters.find((x) => x.id === b.dataset.editChapter); if (f) { ch = f; break; } }
+    if (!ch) return;
+    openSheet(`
+      <h2>챕터 편집</h2>
+      <div class="field"><label>챕터명</label><input type="text" id="ec-name" value="${esc(ch.name)}"></div>
+      <button class="btn primary block" id="ec-save">이름 저장</button>
+      <button class="btn danger block" id="ec-del" style="margin-top:10px">챕터 삭제</button>
+    `, (sheet, close) => {
+      $("#ec-save", sheet).addEventListener("click", () => {
+        const v = $("#ec-name", sheet).value.trim();
+        if (v) store.renameChapter(ch.id, v);
+        close();
+      });
+      $("#ec-del", sheet).addEventListener("click", () => {
+        store.deleteChapter(ch.id);
+        close();
+        toast("챕터를 삭제했습니다");
+      });
+    });
+  }));
+
+  $$("[data-edit-lecture]", viewEl).forEach((b) => b.addEventListener("click", () => {
+    let lec = null;
+    for (const sub of s.subjects) for (const c of sub.chapters) { const f = c.lectures.find((x) => x.id === b.dataset.editLecture); if (f) { lec = f; break; } }
+    if (!lec) return;
+    openSheet(`
+      <h2>강의 편집</h2>
+      <div class="field"><label>강의명</label><input type="text" id="el-name" value="${esc(lec.name)}"></div>
+      <button class="btn primary block" id="el-save">이름 저장</button>
+      <button class="btn danger block" id="el-del" style="margin-top:10px">강의 삭제</button>
+    `, (sheet, close) => {
+      $("#el-save", sheet).addEventListener("click", () => {
+        const v = $("#el-name", sheet).value.trim();
+        if (v) store.renameLecture(lec.id, v);
+        close();
+      });
+      $("#el-del", sheet).addEventListener("click", () => {
+        store.deleteLecture(lec.id);
+        close();
+        toast("강의를 삭제했습니다");
+      });
+    });
+  }));
 
   $("#btn-add-subject").addEventListener("click", () => {
     openSheet(`
@@ -459,13 +531,17 @@ function viewWorkout() {
         <p class="timer-meta">${doneToday ? "오늘 완료 ✓ 다음은 " + store.WORKOUT_CYCLE[(s.workout.index + 1) % 5] : "순서: 등 → 가슴 → 어깨 → 팔 → 하체"}</p>
         <div class="timer-actions">
           ${doneToday
-            ? `<span class="chip green" style="min-height:44px;padding:0 20px">완료</span>`
+            ? `<button class="btn primary" id="btn-workout-undo" style="min-width:150px">오늘 기록 취소</button>`
             : `<button class="btn primary" id="btn-workout-done" style="min-width:150px">운동 완료</button>
                <button class="btn" id="btn-workout-rest" style="min-width:150px">휴식으로 기록</button>`}
         </div>
       </div>
       <div class="week-strip">
-        ${store.WEEKDAYS.map((w, i) => `<div class="day-dot ${weekDone[i] ? "done" : ""}">${w}</div>`).join("")}
+        ${store.WEEKDAYS.map((w, i) => {
+          const d = new Date(week); d.setDate(week.getDate() + i);
+          const k = store.dateKey(d);
+          return `<button class="day-dot ${weekDone[i] ? "done" : ""}" data-wday="${k}">${w}</button>`;
+        }).join("")}
       </div>
       <p class="muted" style="padding:0 4px 4px">이번 주 ${doneCount}회 완료 · 운동을 못 한 날은 같은 종목이 다음 날로 이월되고, 예정된 휴식은 정상 수행으로 기록됩니다</p>
       <div class="row" style="border-top:0.5px solid var(--sep)">
@@ -501,6 +577,16 @@ function viewWorkout() {
     render();
     toast("예정된 휴식으로 기록했습니다");
   });
+  $("#btn-workout-undo")?.addEventListener("click", () => {
+    if (store.undoWorkoutToday()) {
+      render();
+      toast("오늘의 운동 기록을 취소했습니다");
+    }
+  });
+  $$("[data-wday]", viewEl).forEach((b) => b.addEventListener("click", () => {
+    const rec = store.workoutOn(b.dataset.wday);
+    toast(rec ? `${b.dataset.wday} · ${rec.part} ${rec.rest ? "(예정된 휴식)" : "완료"}` : `${b.dataset.wday} · 기록 없음`);
+  }));
   $$("[data-setpart]", viewEl).forEach((b) => b.addEventListener("click", () => {
     store.setWorkoutIndex(parseInt(b.dataset.setpart, 10));
     render();
@@ -540,7 +626,7 @@ function viewStats() {
     const { reg, extra } = store.minutesOnSplit(k);
     const rh = Math.min(100, (reg / 240) * 100);
     const eh = Math.min(100, (extra / 240) * 100);
-    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px">
+    return `<div style="flex:1 0 16px;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:14px">
       <div class="bar" style="flex:1;width:100%;display:flex;align-items:flex-end;position:relative">
         <i style="width:100%;height:${eh}%;border-radius:4px 4px 0 0;background:var(--success);position:absolute;bottom:0;left:0"></i>
         <i style="width:100%;height:${rh}%;border-radius:4px 4px 0 0;position:relative;z-index:1;opacity:${rh ? 1 : 0}"></i>
@@ -565,7 +651,7 @@ function viewStats() {
     </div>
     <div class="card">
       <p class="card-title">날짜별 자습 시간</p>
-      <div style="display:flex;gap:4px;height:150px;padding:14px 0">${bars}</div>
+      <div style="display:flex;gap:4px;height:150px;padding:14px 0;overflow-x:auto;-webkit-overflow-scrolling:touch">${bars}</div>
       <p class="muted" style="padding:0 4px 12px">막대는 하루 4시간 기준 · 주황 정규 자습, 초록 추가 자습 · 미확정 세션은 제외되며 미래 날짜는 실패로 계산하지 않습니다.</p>
     </div>
     <div class="card">
@@ -586,18 +672,120 @@ function viewStats() {
 }
 
 /* ═════════ VIEW: SETTINGS ═════════ */
+function dayToggles(days) {
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;padding:4px 0">
+    ${store.WEEKDAYS.map((w, i) => `<button type="button" class="btn" data-toggle-day="${i}" style="min-height:38px;padding:0 13px;font-size:13px;${days.includes(i) ? "background:var(--accent);color:#fff" : ""}">${w}</button>`).join("")}
+  </div>`;
+}
+
+function openScheduleEdit() {
+  const items = store.scheduleItems();
+  openSheet(`
+    <h2>일정 항목 편집</h2>
+    <p class="muted">반복 시간표를 수정합니다. 변경은 저장 즉시 반영되며, 체크 기록은 날짜별로 그대로 유지됩니다.</p>
+    ${items.map((it) => `
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title">${esc(it.title)}</div>
+          <div class="row-sub">${esc(it.time)} · ${it.days.map((d) => store.WEEKDAYS[d]).join(" ")}</div>
+        </div>
+        <button class="btn" style="min-height:38px;padding:0 12px;font-size:14px" data-sched-edit="${it.id}">⋯</button>
+      </div>`).join("")}
+    <button class="btn primary block" id="btn-sched-add" style="margin-top:10px">일정 항목 추가</button>
+  `, (sheet) => {
+    $$("[data-sched-edit]", sheet).forEach((b) => b.addEventListener("click", () => {
+      const it = store.scheduleItems().find((x) => x.id === b.dataset.schedEdit);
+      let days = [...it.days];
+      openSheet(`
+        <h2>일정 항목 수정</h2>
+        <div class="field"><label>제목</label><input type="text" id="si-title" value="${esc(it.title)}"></div>
+        <div class="field"><label>시간</label><input type="text" id="si-time" value="${esc(it.time)}" placeholder="예: 19:20–20:50"></div>
+        <div class="field"><label>반복 요일</label>${dayToggles(days)}</div>
+        <button class="btn primary block" id="si-save">저장</button>
+        <button class="btn danger block" id="si-del" style="margin-top:10px">이 항목 삭제</button>
+      `, (sheet2, close2) => {
+        $$("[data-toggle-day]", sheet2).forEach((t) => t.addEventListener("click", () => {
+          const i = parseInt(t.dataset.toggleDay, 10);
+          days = days.includes(i) ? days.filter((x) => x !== i) : [...days, i];
+          t.style.background = days.includes(i) ? "var(--accent)" : "";
+          t.style.color = days.includes(i) ? "#fff" : "";
+        }));
+        $("#si-save", sheet2).addEventListener("click", () => {
+          const title = $("#si-title", sheet2).value.trim();
+          const time = $("#si-time", sheet2).value.trim();
+          if (title) store.updateScheduleItem(it.id, { title, time: time || it.time, days });
+          close2();
+          toast("일정 항목을 저장했습니다");
+        });
+        $("#si-del", sheet2).addEventListener("click", () => {
+          store.deleteScheduleItem(it.id);
+          close2();
+          toast("일정 항목을 삭제했습니다");
+        });
+      });
+    }));
+    $("#btn-sched-add", sheet).addEventListener("click", () => {
+      let days = [1, 2, 3, 4, 5];
+      openSheet(`
+        <h2>일정 항목 추가</h2>
+        <div class="field"><label>제목</label><input type="text" id="sa-title" placeholder="예: 복습 정리 30분"></div>
+        <div class="field"><label>시간</label><input type="text" id="sa-time" placeholder="예: 22:00–22:30"></div>
+        <div class="field"><label>반복 요일</label>${dayToggles(days)}</div>
+        <button class="btn primary block" id="sa-save">추가</button>
+      `, (sheet2, close2) => {
+        $$("[data-toggle-day]", sheet2).forEach((t) => t.addEventListener("click", () => {
+          const i = parseInt(t.dataset.toggleDay, 10);
+          days = days.includes(i) ? days.filter((x) => x !== i) : [...days, i];
+          t.style.background = days.includes(i) ? "var(--accent)" : "";
+          t.style.color = days.includes(i) ? "#fff" : "";
+        }));
+        $("#sa-save", sheet2).addEventListener("click", () => {
+          const title = $("#sa-title", sheet2).value.trim();
+          const time = $("#sa-time", sheet2).value.trim() || "하루 종일";
+          if (title && days.length) {
+            store.addScheduleItem({ title, time, days });
+            close2();
+            toast("일정 항목을 추가했습니다");
+          }
+        });
+      });
+    });
+  });
+}
+
 function viewSettings() {
   const s = store.get();
   const st = s.settings;
-  const standalone = window.navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
 
   viewEl.innerHTML = `
     <div class="card">
-      <p class="card-title">설치</p>
-      <div class="row"><div class="row-main">
-        <div class="row-title">홈 화면에 추가</div>
-        <div class="row-sub">${standalone ? "이미 홈 화면 앱으로 실행 중입니다 ✓" : "Safari 공유 버튼 → 홈 화면에 추가"}</div>
-      </div></div>
+      <p class="card-title">화면</p>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title">흑백 모드</div>
+          <div class="row-sub">강조색을 제거하고 무채색 톤으로 표시합니다</div>
+        </div>
+        <button class="switch ${st.bw ? "on" : ""}" id="sw-bw" role="switch" aria-checked="${st.bw}"></button>
+      </div>
+    </div>
+    <div class="card">
+      <p class="card-title">일정 · 목표</p>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title">일정 항목 편집</div>
+          <div class="row-sub">반복 시간표의 제목·시간·요일 추가/수정/삭제</div>
+        </div>
+        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-sched">편집</button>
+      </div>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title">기본 학습 목표</div>
+          <div class="row-sub">평일 하루 강의 목표 (기본 ${s.goalBase}강)</div>
+        </div>
+        <div class="stepper">
+          <button id="gb-minus">−</button><span class="val" id="gb-val">${s.goalBase}</span><button id="gb-plus">+</button>
+        </div>
+      </div>
     </div>
     <div class="card">
       <p class="card-title">iCloud 캘린더 동기화 (CalDAV)</p>
@@ -616,26 +804,24 @@ function viewSettings() {
         </div>
       </div>
     </div>
-    <div class="card">
-      <p class="card-title">데이터 백업</p>
-      <div class="row"><div class="row-main">
-        <div class="row-title">JSON 내보내기 / 가져오기</div>
-        <div class="row-sub">복원 전 자동 백업이 생성되며, 트랜잭션이 원자적입니다</div>
-      </div></div>
-      <div style="display:flex;gap:10px;padding:10px 0 14px">
-        <button class="btn block" id="btn-export">내보내기</button>
-        <button class="btn block" id="btn-import">가져오기</button>
-        <input type="file" id="file-import" accept="application/json" style="display:none">
-      </div>
-    </div>
-    <div class="card">
-      <p class="card-title">정보</p>
-      <div class="row"><div class="row-main"><div class="row-title">Nudge</div><div class="row-sub">PWA · v1.0 · Fluent 2 영감 디자인</div></div></div>
-    </div>
   `;
 
   titleEl.textContent = "설정";
-  subEl.textContent = "동기화와 백업";
+  subEl.textContent = "화면 · 일정 · 동기화";
+
+  $("#sw-bw").addEventListener("click", () => {
+    st.bw = !st.bw;
+    store.save();
+    document.documentElement.classList.toggle("bw", st.bw);
+    render();
+  });
+
+  $("#btn-sched").addEventListener("click", openScheduleEdit);
+
+  let gb = s.goalBase;
+  const updGb = () => { $("#gb-val").textContent = gb; };
+  $("#gb-minus").addEventListener("click", () => { gb = Math.max(0, gb - 1); store.setGoalBase(gb); updGb(); });
+  $("#gb-plus").addEventListener("click", () => { gb = Math.min(20, gb + 1); store.setGoalBase(gb); updGb(); });
 
   $("#sw-caldav").addEventListener("click", () => {
     st.caldavEnabled = !st.caldavEnabled;
@@ -674,51 +860,25 @@ function viewSettings() {
       toast(friendlyError(e), 7000);
     }
   });
-
-  $("#btn-export").addEventListener("click", () => {
-    const blob = new Blob([store.exportJSON()], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `nudge-backup-${store.dateKey()}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast("백업 파일을 내보냈습니다");
-  });
-
-  $("#btn-import").addEventListener("click", () => $("#file-import").click());
-  $("#file-import").addEventListener("change", async (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    const text = await f.text();
-    try {
-      store.importJSON(text);
-      render();
-      toast("복원 완료 — 이전 데이터는 백업으로 보존되었습니다");
-    } catch (err) {
-      toast("복원 실패: " + err.message, 5000);
-    }
-  });
 }
 
 /* ── router ─────────────────────────────── */
 const VIEWS = { today: viewToday, study: viewStudy, workout: viewWorkout, stats: viewStats, settings: viewSettings };
 
-export function render() {
+export function render(scrollTop = false) {
   clearInterval(tickTimer);
   VIEWS[currentView]();
-  viewEl.classList.remove("enter");
-  void viewEl.offsetWidth;
-  viewEl.classList.add("enter");
   $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === currentView));
-  window.scrollTo({ top: 0 });
+  if (scrollTop) window.scrollTo({ top: 0 });
 }
 
 $$(".tab").forEach((t) => t.addEventListener("click", () => {
   if (t.dataset.view === currentView) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
   currentView = t.dataset.view;
-  render();
+  render(true);
 }));
 
+if (store.get().settings.bw) document.documentElement.classList.add("bw");
 render();
 
 if ("serviceWorker" in navigator) {
