@@ -4,7 +4,7 @@ const SCHEMA = 1;
 
 export const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-export const DEFAULT_SCHEDULE = [
+const DEFAULT_SCHEDULE = [
   { id: "wake", title: "기상 · 아침 준비 · 이동", time: "06:00–06:50", days: [1, 2, 3, 4, 5] },
   { id: "morning", title: "오전 자습 120분", time: "06:50–08:50", days: [1, 2, 3, 4, 5] },
   { id: "work", title: "복무 · 허용 시간 강의", time: "09:00–18:00", days: [1, 2, 3, 4, 5] },
@@ -18,7 +18,7 @@ export const DEFAULT_SCHEDULE = [
 ];
 
 export const WORKOUT_CYCLE = ["등", "가슴", "어깨", "팔", "하체"];
-export const DEFAULT_ROUTINES = {
+const DEFAULT_ROUTINES = {
   "등": ["풀업", "랫풀다운", "시티드 케이블 로우", "바벨 로우"],
   "가슴": ["벤치프레스", "인클라인 덤벨 프레스", "케이블 체스트 프레스", "딥스"],
   "어깨": ["오버헤드 프레스", "덤벨 숄더 프레스", "레터럴 레이즈", "페이스 풀"],
@@ -97,11 +97,6 @@ export function save() {
 }
 
 export function get() { return state; }
-
-export function reset() {
-  state = defaultState();
-  save();
-}
 
 /* ── dates ─────────────────────────────── */
 export function dateKey(d = new Date()) {
@@ -441,8 +436,4 @@ export function undoWorkoutToday() {
   save();
   return true;
 }
-export function workoutOn(key) {
-  return state.workout.history.find((h) => h.date === key && h.done) || null;
-}
-
 /* ── backup / restore ──────────────────── */

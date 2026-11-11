@@ -294,7 +294,8 @@ function viewToday() {
       if (!e.target.closest(".check")) return;
       const on = store.toggleCheck(key, row.dataset.check);
       row.classList.toggle("done", on);
-      const done2 = checks.filter((c) => (c.id === row.dataset.check ? on : !!store.dayChecks(key)[c.id])).length;
+      const snap = store.dayChecks(key);
+      const done2 = checks.reduce((a, c) => a + (c.id === row.dataset.check ? on : !!snap[c.id]), 0);
       const pct2 = Math.round((done2 / Math.max(1, checks.length)) * 100);
       const ring = $(".ring .fill", viewEl);
       if (ring) ring.style.strokeDashoffset = 295.3 * (1 - pct2 / 100);
@@ -440,10 +441,8 @@ function viewStudy() {
   const stats = store.lectureStats();
   const pct = stats.total ? Math.round((stats.done / stats.total) * 100) : 0;
   const todayGoal = s.goal.daily;
-  const origGoal = s.goalBase;
   const doneToday = store.lecturesDoneOn(store.dateKey());
   const goalPct = Math.min(100, Math.round((doneToday / Math.max(1, todayGoal)) * 100));
-  const origPct = Math.min(100, Math.round((doneToday / origGoal) * 100));
   const waived = todayGoal === 0;
 
   viewEl.innerHTML = `
@@ -492,11 +491,10 @@ function viewStudy() {
         <div class="row" data-swipe="subject:${sub.id}">
           <div class="row-main">
             ${editing.level === "subject" && editing.id === sub.id
-              ? `<input type="text" class="ren" id="ren-subject" value="${esc(sub.name)}" style="min-height:38px">`
-              : `<div class="row-title">${esc(sub.name)}</div>`}
+              ? `<input type="text" class="ren" id="ren-subject" value="${esc(sub.name)}">`
+              : `<div class="row-title edit-tap" data-edit-subject="${sub.id}">${esc(sub.name)}</div>`}
             <div class="row-sub">${sub.chapters.reduce((a, c) => a + c.lectures.length, 0)}강</div>
           </div>
-          <button class="btn icon-btn" aria-label="과목 이름 변경" data-edit-subject="${sub.id}">${PENCIL_SVG}</button>
           <button class="btn icon-btn" aria-label="챕터 추가" data-add-chapter="${sub.id}" style="background:var(--accent);color:#fff">${adding.level === "chapter" && adding.id === sub.id ? "취소" : PLUS_SVG}</button>
         </div>
       </div>
