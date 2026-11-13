@@ -333,8 +333,10 @@ export function minutesOnSplit(key) {
 
 /* ── lectures ───────────────────────────── */
 export function addSubject(name) {
-  state.subjects.push({ id: crypto.randomUUID(), name, chapters: [] });
+  const sub = { id: crypto.randomUUID(), name, chapters: [] };
+  state.subjects.push(sub);
   save();
+  return sub.id;
 }
 export function renameSubject(id, name) {
   const s = state.subjects.find((x) => x.id === id);
