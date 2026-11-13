@@ -54,13 +54,7 @@ function defaultState() {
       bw: false,
       theme: "system",
       notify: false,
-      successMin: 80,
-      caldavEnabled: false,
-      caldavUrl: "https://caldav.icloud.com",
-      caldavUser: "",
-      caldavPass: "",
-      caldavLastSync: null,
-      caldavUids: {}
+      successMin: 80
     },
     logs: []
   };

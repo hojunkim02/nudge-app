@@ -1,6 +1,5 @@
 // Nudge — app shell: router, views, sheets, toasts
 import * as store from "./store.js";
-import { testConnection, sync, friendlyError } from "./caldav.js";
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -495,7 +494,7 @@ function viewStudy() {
               : `<div class="row-title edit-tap" data-edit-subject="${sub.id}">${esc(sub.name)}</div>`}
             <div class="row-sub">${sub.chapters.reduce((a, c) => a + c.lectures.length, 0)}강</div>
           </div>
-          <button class="btn icon-btn" aria-label="챕터 추가" data-add-chapter="${sub.id}" style="background:var(--accent);color:#fff">${adding.level === "chapter" && adding.id === sub.id ? "취소" : PLUS_SVG}</button>
+          <button class="btn icon-btn" aria-label="챕터 추가" data-add-chapter="${sub.id}" style="background:var(--accent);color:var(--on-fill)">${adding.level === "chapter" && adding.id === sub.id ? "취소" : PLUS_SVG}</button>
         </div>
       </div>
       ${adding.level === "chapter" && adding.id === sub.id ? `<div style="padding-left:14px">${ADD_ROW("qa-chapter")}</div>` : ""}
@@ -506,14 +505,14 @@ function viewStudy() {
               <div class="row-main">${editing.level === "chapter" && editing.id === ch.id
                 ? `<input type="text" class="ren" id="ren-chapter" value="${esc(ch.name)}" style="font-size:14px">`
                 : `<div class="row-title edit-tap" style="font-size:14px" data-edit-chapter="${ch.id}">${esc(ch.name)}</div>`}</div>
-              <button class="btn icon-btn" style="min-width:34px;min-height:34px;background:var(--accent);color:#fff" aria-label="강의 추가" data-add-lecture="${ch.id}">${adding.level === "lecture" && adding.id === ch.id ? "취소" : PLUS_SVG}</button>
+              <button class="btn icon-btn" style="min-width:34px;min-height:34px;background:var(--accent);color:var(--on-fill)" aria-label="강의 추가" data-add-lecture="${ch.id}">${adding.level === "lecture" && adding.id === ch.id ? "취소" : PLUS_SVG}</button>
             </div>
           </div>
           ${adding.level === "lecture" && adding.id === ch.id ? `<div style="padding-left:14px">${ADD_ROW("qa-lecture")}</div>` : ""}
           ${ch.lectures.map((l) => `
             <div class="swipe-wrap" style="padding-left:14px">
               <div class="row" style="min-height:44px" data-swipe="lecture:${l.id}">
-                <button class="check ${l.status === "완료" ? "on" : ""}" style="${l.status === "완료" ? "background:var(--success);border-color:var(--success);color:#fff" : ""}" data-cycle="${l.id}">${CHECK_SVG}</button>
+                <button class="check ${l.status === "완료" ? "on" : ""}" style="${l.status === "완료" ? "background:var(--success);border-color:var(--success);color:var(--on-fill)" : ""}" data-cycle="${l.id}">${CHECK_SVG}</button>
                 <div class="row-main">
                   ${editing.level === "lecture" && editing.id === l.id
                     ? `<input type="text" class="ren" id="ren-lecture" value="${esc(l.name)}" style="font-size:14px">`
@@ -711,7 +710,28 @@ function viewWorkout() {
       </div>
       <p class="muted" style="padding:0 4px 12px">이번 주 ${weekDone.filter(Boolean).length}회 완료</p>
     </div>
-    ${!isRest && routine.length ? `
+    ${doneToday ? (() => {
+      const now = new Date();
+      const y = now.getFullYear(), m = now.getMonth();
+      const daysInMonth = new Date(y, m + 1, 0).getDate();
+      const lead = new Date(y, m, 1).getDay();
+      const cells = [];
+      for (let i = 0; i < lead; i++) cells.push(`<span class="cal-cell"></span>`);
+      let monthDone = 0;
+      for (let d = 1; d <= daysInMonth; d++) {
+        const k = store.dateKey(new Date(y, m, d));
+        const done = store.workoutDoneOn(k);
+        if (done) monthDone++;
+        cells.push(`<span class="cal-cell${done ? " on" : ""}${k === todayKey ? " today" : ""}">${done ? CHECK_SVG : d}</span>`);
+      }
+      return `
+    <div class="card">
+      <p class="card-title">${m + 1}월 운동 기록 · ${monthDone}회 완료</p>
+      <div class="cal-grid">
+        ${["일", "월", "화", "수", "목", "금", "토"].map((w) => `<span class="cal-head">${w}</span>`).join("")}
+        ${cells.join("")}
+      </div>
+    </div>`; })() : (!isRest && routine.length ? `
     <div class="card">
       <p class="card-title">오늘의 루틴</p>
       ${routine.map((ex, i) => `
@@ -722,7 +742,7 @@ function viewWorkout() {
             ${i === doneCount && isToday && !doneToday && !allDone ? `<div class="row-sub">다음 운동</div>` : ""}
           </div>
         </div>`).join("")}
-    </div>` : ""}
+    </div>` : "")}
     <div class="card">
       <p class="card-title">최근 기록</p>
       ${s.workout.history.slice(-8).reverse().map((h) => `
@@ -862,7 +882,7 @@ function viewStats() {
 /* ═════════ VIEW: SETTINGS ═════════ */
 function dayToggles(days) {
   return `<div style="display:flex;gap:6px;flex-wrap:wrap;padding:4px 0">
-    ${store.WEEKDAYS.map((w, i) => `<button type="button" class="btn" data-toggle-day="${i}" style="min-height:38px;padding:0 13px;font-size:13px;${days.includes(i) ? "background:var(--accent);color:#fff" : ""}">${w}</button>`).join("")}
+    ${store.WEEKDAYS.map((w, i) => `<button type="button" class="btn" data-toggle-day="${i}" style="min-height:38px;padding:0 13px;font-size:13px;${days.includes(i) ? "background:var(--accent);color:var(--on-fill)" : ""}">${w}</button>`).join("")}
   </div>`;
 }
 
@@ -939,6 +959,50 @@ function openScheduleEdit() {
   });
 }
 
+function downloadICS() {
+  const s = store.get();
+  const escIcs = (v) => String(v).replace(/\\,/g, "").replace(/[,;]/g, " ").replace(/\n/g, " ");
+  const GCAL_DOW = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nudge//PWA//KO", "CALSCALE:GREGORIAN"];
+  for (const it of s.schedule) {
+    const m = it.time.match(/(\d{1,2}):(\d{2})\D+(\d{1,2}):(\d{2})/);
+    if (!m || !it.days.length) continue;
+    const start = new Date();
+    start.setDate(start.getDate() + ((Math.min(...it.days) - start.getDay() + 7) % 7 || 7));
+    start.setHours(+m[1], +m[2], 0, 0);
+    const end = new Date(start.getTime());
+    end.setHours(+m[3], +m[4], 0, 0);
+    lines.push("BEGIN:VEVENT",
+      `UID:nudge-sched-${it.id}@nudge`,
+      `DTSTAMP:${icsStamp(new Date())}`,
+      `DTSTART;TZID=Asia/Seoul:${icsStamp(start)}`,
+      `DTEND;TZID=Asia/Seoul:${icsStamp(end)}`,
+      `SUMMARY:${escIcs(it.title)}`,
+      `RRULE:FREQ=WEEKLY;BYDAY=${it.days.map((d) => GCAL_DOW[d]).join(",")}`,
+      "END:VEVENT");
+  }
+  for (const sess of s.sessions) {
+    if (sess.status !== "finalized") continue;
+    lines.push("BEGIN:VEVENT",
+      `UID:nudge-sess-${sess.id}@nudge`,
+      `DTSTAMP:${icsStamp(new Date())}`,
+      `DTSTART;VALUE=DATE:${sess.date.replace(/-/g, "")}`,
+      `SUMMARY:${escIcs((sess.label || "자습") + " " + sess.finalMin + "분")}`,
+      "END:VEVENT");
+  }
+  lines.push("END:VCALENDAR");
+  const blob = new Blob([lines.join("\r\n")], { type: "text/calendar;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "nudge.ics";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function icsStamp(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
+}
+
 function viewSettings() {
   const s = store.get();
   const st = s.settings;
@@ -973,7 +1037,7 @@ function viewSettings() {
       </div>
     </div>
     <div class="card">
-      <p class="card-title">일정 · 목표</p>
+      <p class="card-title">학습 설정</p>
       <div class="row">
         <div class="row-main">
           <div class="row-title">일정 항목</div>
@@ -988,6 +1052,21 @@ function viewSettings() {
       </div>
       <div class="row">
         <div class="row-main">
+          <div class="row-title">자습 성공 기준</div>
+        </div>
+        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-succ">편집</button>
+      </div>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title">캘린더로 내보내기</div>
+        </div>
+        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-ics">.ics</button>
+      </div>
+    </div>
+    <div class="card">
+      <p class="card-title">운동 설정</p>
+      <div class="row">
+        <div class="row-main">
           <div class="row-title">요일별 분할</div>
         </div>
         <button class="btn" style="min-height:40px;padding:0 16px" id="btn-wassign">편집</button>
@@ -998,32 +1077,11 @@ function viewSettings() {
         </div>
         <button class="btn" style="min-height:40px;padding:0 16px" id="btn-routine">편집</button>
       </div>
-      <div class="row">
-        <div class="row-main">
-          <div class="row-title">자습 성공 기준</div>
-        </div>
-        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-succ">편집</button>
-      </div>
-    </div>
-    <div class="card">
-      <p class="card-title">iCloud 캘린더 동기화</p>
-      <div class="row">
-        <div class="row-main"><div class="row-title">동기화</div></div>
-        <button class="switch ${st.caldavEnabled ? "on" : ""}" id="sw-caldav" role="switch" aria-checked="${st.caldavEnabled}"></button>
-      </div>
-      <div id="caldav-fields" style="${st.caldavEnabled ? "" : "display:none"}">
-        <div class="field"><label>Apple ID</label><input type="text" id="cd-user" value="${esc(st.caldavUser)}" placeholder="example@icloud.com" autocomplete="off"></div>
-        <div class="field"><label>앱 전용 비밀번호</label><input type="password" id="cd-pass" value="${esc(st.caldavPass)}" placeholder="appleid.apple.com에서 생성"></div>
-        <div style="display:flex;gap:10px;padding:8px 0 14px">
-          <button class="btn" id="btn-cd-test">연결 테스트</button>
-          <button class="btn primary" id="btn-cd-sync">지금 동기화</button>
-        </div>
-      </div>
     </div>
   `;
 
   titleEl.textContent = "설정";
-  subEl.textContent = "화면 · 일정 · 동기화";
+  subEl.textContent = "화면 · 학습 · 운동";
 
   ["system", "light", "dark"].forEach((mode) => {
     $("#th-" + mode).addEventListener("click", () => {
@@ -1057,6 +1115,7 @@ function viewSettings() {
   });
 
   $("#btn-sched").addEventListener("click", openScheduleEdit);
+  $("#btn-ics").addEventListener("click", () => { downloadICS(); toast("캘린더 파일을 내보냈습니다. 구글 캘린더에서 가져오세요"); });
 
   $("#btn-goal").addEventListener("click", () => {
     let gb = store.get().goalBase;
@@ -1196,41 +1255,6 @@ function viewSettings() {
     });
   });
 
-  $("#sw-caldav").addEventListener("click", () => {
-    st.caldavEnabled = !st.caldavEnabled;
-    store.save();
-    render();
-  });
-
-  const persistFields = () => {
-    st.caldavUser = $("#cd-user").value.trim();
-    st.caldavPass = $("#cd-pass").value;
-    store.save();
-  };
-  ["cd-user", "cd-pass"].forEach((id) => $("#" + id)?.addEventListener("change", persistFields));
-
-  $("#btn-cd-test")?.addEventListener("click", async () => {
-    persistFields();
-    toast("연결을 시도하는 중…", 1500);
-    try {
-      const r = await testConnection();
-      toast(`연결 성공: ${r.principal}`);
-    } catch (e) {
-      toast(friendlyError(e), 6000);
-    }
-  });
-
-  $("#btn-cd-sync")?.addEventListener("click", async () => {
-    persistFields();
-    toast("동기화 중…", 1500);
-    try {
-      const r = await sync();
-      toast(r.pushed ? `캘린더에 ${r.pushed}개 항목을 동기화했습니다` : "새로 동기화할 항목이 없습니다");
-      render();
-    } catch (e) {
-      toast(friendlyError(e), 7000);
-    }
-  });
 }
 
 /* ── router ─────────────────────────────── */
