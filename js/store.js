@@ -50,11 +50,15 @@ function defaultState() {
       progress: { date: null, done: 0 },
       history: []
     },
+    gcalMap: {},         // { "sched:<id>": googleEventId, "sess:<id>": googleEventId }
     settings: {
       bw: false,
       theme: "system",
       notify: false,
-      successMin: 80
+      successMin: 80,
+      gcalClientId: "",
+      gcalCalendarId: "",
+      gcalSyncedAt: null
     },
     logs: []
   };

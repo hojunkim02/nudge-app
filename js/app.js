@@ -1,5 +1,6 @@
 // Nudge — app shell: router, views, sheets, toasts
 import * as store from "./store.js";
+import * as gcal from "./gcal.js";
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -1003,6 +1004,38 @@ function icsStamp(d) {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
 }
 
+let gcalCals = [];
+async function syncGoogle() {
+  const s = store.get();
+  const calId = s.settings.gcalCalendarId;
+  if (!calId) throw new Error("캘린더를 선택해 주세요");
+  const map = s.gcalMap;
+  const keep = new Set();
+  let pushed = 0;
+  for (const it of s.schedule) {
+    const nid = "sched:" + it.id;
+    const body = gcal.buildScheduleEvent(it);
+    if (!body) continue;
+    keep.add(nid);
+    const ev = await gcal.upsertEvent(calId, map[nid], body);
+    map[nid] = ev.id; pushed++;
+  }
+  for (const sess of s.sessions) {
+    const nid = "sess:" + sess.id;
+    const body = gcal.buildSessionEvent(sess);
+    if (!body) continue;
+    keep.add(nid);
+    const ev = await gcal.upsertEvent(calId, map[nid], body);
+    map[nid] = ev.id; pushed++;
+  }
+  for (const [nid, eid] of Object.entries({ ...map })) {
+    if (!keep.has(nid) && await gcal.deleteEvent(calId, eid)) delete map[nid];
+  }
+  s.settings.gcalSyncedAt = Date.now();
+  store.save();
+  return pushed;
+}
+
 function viewSettings() {
   const s = store.get();
   const st = s.settings;
@@ -1078,6 +1111,21 @@ function viewSettings() {
         <button class="btn" style="min-height:40px;padding:0 16px" id="btn-routine">편집</button>
       </div>
     </div>
+    <div class="card">
+      <p class="card-title">구글 캘린더 동기화</p>
+      <div class="field"><label>OAuth 클라이언트 ID</label><input type="text" id="gc-id" value="${esc(st.gcalClientId)}" placeholder="Google Cloud Console에서 발급" autocomplete="off"></div>
+      <div class="field"><label>캘린더</label>
+        <select id="gc-cal" style="width:100%;min-height:42px">
+          <option value="">연결 후 선택</option>
+          ${gcalCals.map((c) => `<option value="${esc(c.id)}" ${st.gcalCalendarId === c.id ? "selected" : ""}>${esc(c.title)}</option>`).join("")}
+        </select>
+      </div>
+      <div style="display:flex;gap:10px;padding:8px 0 6px">
+        <button class="btn" id="btn-gc-connect">연결</button>
+        <button class="btn primary" id="btn-gc-sync">지금 동기화</button>
+      </div>
+      ${st.gcalSyncedAt ? `<p class="muted">마지막 동기화: ${new Date(st.gcalSyncedAt).toLocaleString("ko-KR")}</p>` : `<p class="muted">일정 항목은 주간 반복 일정으로, 자습 세션은 종일 일정으로 업데이트됩니다.</p>`}
+    </div>
   `;
 
   titleEl.textContent = "설정";
@@ -1116,6 +1164,34 @@ function viewSettings() {
 
   $("#btn-sched").addEventListener("click", openScheduleEdit);
   $("#btn-ics").addEventListener("click", () => { downloadICS(); toast("캘린더 파일을 내보냈습니다. 구글 캘린더에서 가져오세요"); });
+
+  $("#gc-id")?.addEventListener("change", () => { st.gcalClientId = $("#gc-id").value.trim(); store.save(); });
+  $("#gc-cal")?.addEventListener("change", () => { st.gcalCalendarId = $("#gc-cal").value; store.save(); });
+  $("#btn-gc-connect")?.addEventListener("click", async () => {
+    const cid = $("#gc-id").value.trim();
+    if (!cid) { toast("OAuth 클라이언트 ID를 입력해 주세요"); return; }
+    st.gcalClientId = cid; store.save();
+    try {
+      await gcal.login(cid);
+      gcalCals = await gcal.listCalendars();
+      if (!st.gcalCalendarId && gcalCals[0]) st.gcalCalendarId = gcalCals[0].id;
+      store.save();
+      render();
+      toast("Google 계정에 연결했습니다");
+    } catch (e) { toast(e.message, 5000); }
+  });
+  $("#btn-gc-sync")?.addEventListener("click", async () => {
+    const cid = $("#gc-id")?.value.trim() || st.gcalClientId;
+    if (!cid) { toast("OAuth 클라이언트 ID를 입력해 주세요"); return; }
+    if (!st.gcalCalendarId) { toast("캘린더를 선택해 주세요"); return; }
+    toast("동기화 중…", 1500);
+    try {
+      if (!gcal.hasToken()) await gcal.login(cid);
+      const n = await syncGoogle();
+      render();
+      toast(`구글 캘린더에 ${n}개 항목을 업데이트했습니다`);
+    } catch (e) { toast(e.message, 6000); render(); }
+  });
 
   $("#btn-goal").addEventListener("click", () => {
     let gb = store.get().goalBase;
