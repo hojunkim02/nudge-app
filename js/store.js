@@ -60,12 +60,74 @@ function defaultState() {
   };
 }
 
+
+/* ── demo seed: 한 달간 사용한 것 같은 예시 데이터 (demo 브랜치 전용) ── */
+function demoState() {
+  const st = defaultState();
+  const today = new Date();
+  const dk = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const day = (n) => { const d = new Date(today); d.setDate(d.getDate() - n); return d; };
+  let uid = 0;
+  const id = () => `demo-${++uid}`;
+
+  // 과목/챕터/강의 (약 60% 완료)
+  const mkSub = (name, chapters) => ({
+    id: id(), name,
+    chapters: chapters.map(([cn, n, doneUpTo]) => ({
+      id: id(), name: cn,
+      lectures: Array.from({ length: n }, (_, i) => ({ id: id(), name: `${i + 1}강`, status: i < doneUpTo ? "완료" : "미학습" }))
+    }))
+  });
+  st.subjects = [
+    mkSub("재무회계론", [["ch01 회계의 기본개념", 12, 12], ["ch02 재무제표", 14, 12], ["ch03 유동자산", 10, 5], ["ch04 유동부채", 8, 0]]),
+    mkSub("원가회계", [["ch01 원가의 개념", 10, 10], ["ch02 원가배분", 12, 7], ["ch03 표준원가", 9, 2]]),
+    mkSub("경제학", [["ch01 미시경제", 16, 16], ["ch02 거시경제", 14, 9], ["ch03 국제경제", 8, 1]])
+  ];
+
+  // 최근 35일 자습 세션 + 체크 + 점심 + 운동 기록
+  for (let n = 35; n >= 1; n--) {
+    const d = day(n);
+    const key = dk(d);
+    const dow = d.getDay();
+    if (dow === 0) continue;
+    const rnd = (n * 37) % 10;
+    if (dow === 6 && rnd < 5) continue;
+    const reg = 150 + ((n * 53) % 6) * 25;
+    st.sessions.push({ id: id(), date: key, label: dow === 6 ? "추가 자습" : (n % 3 === 0 ? "저녁 자습" : "오전 자습"), kind: "regular", start: `08:${String((n * 17) % 60).padStart(2, "0")}`, end: "22:00", measuredMin: reg, finalMin: reg, status: "finalized" });
+    if (rnd >= 7) st.sessions.push({ id: id(), date: key, label: "추가 자습", kind: "extra", start: "22:10", end: "23:00", measuredMin: 50, finalMin: 50, status: "finalized" });
+    if (dow >= 1 && dow <= 5) {
+      st.checks[key] = {};
+      for (const c of st.schedule) if (c.days.includes(dow) && !c.optional) st.checks[key][c.id] = rnd >= 3;
+      st.lunch[key] = rnd >= 4 ? "yes" : "no";
+    }
+    if (dow >= 1 && dow <= 5 && rnd >= 3) {
+      const part = st.workout.assign[dow];
+      st.workout.history.push({ date: key, part, done: true, rest: part === "휴식" });
+    }
+  }
+  // 오늘: 일부 진행 중인 상태
+  const tKey = dk(today);
+  if ([1, 2, 3, 4, 5].includes(today.getDay())) {
+    st.checks[tKey] = {};
+    for (const c of st.schedule) if (c.days.includes(today.getDay()) && !c.optional) st.checks[tKey][c.id] = true;
+    st.checks[tKey][st.schedule[0].id] = true;
+  }
+  st.sessions.push({ id: id(), date: tKey, label: "오전 자습", kind: "regular", start: "08:00", end: "11:00", measuredMin: 180, finalMin: 180, status: "finalized" });
+  st.sessions.push({ id: id(), date: tKey, label: "점심 자습", kind: "regular", start: "12:10", end: "12:50", measuredMin: 40, finalMin: 40, status: "pending" });
+  st.goal.adjustLog = [
+    { date: dk(day(12)), from: 10, to: 6, reason: "업무 지시로 야근", at: Date.now() - 12 * 864e5 },
+    { date: dk(day(5)), from: 10, to: 8, reason: "재무회계 시험 대비", at: Date.now() - 5 * 864e5 }
+  ];
+  st.workout.progress = { date: tKey, done: 2 };
+  return st;
+}
+
 let state = load();
 
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return defaultState();
+    if (!raw) return demoState();
     const data = JSON.parse(raw);
     const base = defaultState();
     const st = { ...base, ...data, settings: { ...base.settings, ...(data.settings || {}) }, goal: { ...base.goal, ...(data.goal || {}) }, workout: { ...base.workout, ...(data.workout || {}) } };
