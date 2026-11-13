@@ -461,16 +461,14 @@ function viewStudy() {
         <p class="muted" style="padding-top:6px">전체 진도 ${stats.done}/${stats.total}강 (${pct}%)</p>
       </div>
     </div>
-    <div class="card">
-      <p class="card-title">과목 · 강의</p>
-      <div id="subject-list">
-        ${adding.level === "subject" ? ADD_ROW("qa-subject") : ""}
-        ${s.subjects.length ? s.subjects.map((sub) => subjectHtml(sub)).join("") : `<p class="muted">아직 과목이 없습니다. 아래 버튼으로 추가하세요.</p>`}
+    <div class="study-top">
+      <div class="subject-nav" id="subject-nav">
+        ${s.subjects.map((sub) => `<button class="chip" data-goto-subject="${sub.id}">${esc(sub.name)}</button>`).join("")}
       </div>
-      <div style="display:flex;gap:10px;padding:10px 0 12px">
-        <button class="btn primary block" id="btn-add-subject" aria-label="과목 추가">${adding.level === "subject" ? "취소" : PLUS_SVG + " 과목 추가"}</button>
-      </div>
+      <button class="btn icon-btn" id="btn-add-subject" aria-label="과목 추가" style="min-width:36px;min-height:36px;flex:none">${adding.level === "subject" ? "취소" : PLUS_SVG}</button>
     </div>
+    ${adding.level === "subject" ? `<div class="card">${ADD_ROW("qa-subject")}</div>` : ""}
+    ${s.subjects.map((sub) => `<div class="card subject-card" id="sub-${sub.id}">${subjectHtml(sub)}</div>`).join("") || (adding.level === "subject" ? "" : `<p class="muted">아직 과목이 없습니다. + 버튼으로 추가하세요.</p>`)}
     ${s.goal.adjustLog.length ? `
     <div class="card">
       <p class="card-title">목표 조정 이력</p>
@@ -536,6 +534,12 @@ function viewStudy() {
     });
   });
 
+  // subject navigation
+  $$("[data-goto-subject]", viewEl).forEach((b) => b.addEventListener("click", () => {
+    const el = $("#sub-" + b.dataset.gotoSubject, viewEl);
+    el?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }));
+
   // cycle status
   $$("[data-cycle]", viewEl).forEach((b) => b.addEventListener("click", (e) => {
     if (e.target.closest("[data-swipe]") && !e.target.closest("[data-cycle]")) return;
@@ -565,9 +569,11 @@ function viewStudy() {
     wireAddRow("qa-subject", () => {
       const v = $("#qa-subject", viewEl).value.trim();
       if (!v) return;
-      store.addSubject(v);
+      const nid = store.addSubject(v);
       adding.level = null;
       render();
+      const el = $("#sub-" + nid, viewEl);
+      el?.scrollIntoView?.({ behavior: "smooth", block: "start" });
     });
   });
 
@@ -960,50 +966,6 @@ function openScheduleEdit() {
   });
 }
 
-function downloadICS() {
-  const s = store.get();
-  const escIcs = (v) => String(v).replace(/\\,/g, "").replace(/[,;]/g, " ").replace(/\n/g, " ");
-  const GCAL_DOW = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
-  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nudge//PWA//KO", "CALSCALE:GREGORIAN"];
-  for (const it of s.schedule) {
-    const m = it.time.match(/(\d{1,2}):(\d{2})\D+(\d{1,2}):(\d{2})/);
-    if (!m || !it.days.length) continue;
-    const start = new Date();
-    start.setDate(start.getDate() + ((Math.min(...it.days) - start.getDay() + 7) % 7 || 7));
-    start.setHours(+m[1], +m[2], 0, 0);
-    const end = new Date(start.getTime());
-    end.setHours(+m[3], +m[4], 0, 0);
-    lines.push("BEGIN:VEVENT",
-      `UID:nudge-sched-${it.id}@nudge`,
-      `DTSTAMP:${icsStamp(new Date())}`,
-      `DTSTART;TZID=Asia/Seoul:${icsStamp(start)}`,
-      `DTEND;TZID=Asia/Seoul:${icsStamp(end)}`,
-      `SUMMARY:${escIcs(it.title)}`,
-      `RRULE:FREQ=WEEKLY;BYDAY=${it.days.map((d) => GCAL_DOW[d]).join(",")}`,
-      "END:VEVENT");
-  }
-  for (const sess of s.sessions) {
-    if (sess.status !== "finalized") continue;
-    lines.push("BEGIN:VEVENT",
-      `UID:nudge-sess-${sess.id}@nudge`,
-      `DTSTAMP:${icsStamp(new Date())}`,
-      `DTSTART;VALUE=DATE:${sess.date.replace(/-/g, "")}`,
-      `SUMMARY:${escIcs((sess.label || "자습") + " " + sess.finalMin + "분")}`,
-      "END:VEVENT");
-  }
-  lines.push("END:VCALENDAR");
-  const blob = new Blob([lines.join("\r\n")], { type: "text/calendar;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "nudge.ics";
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-}
-function icsStamp(d) {
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
-}
-
 let gcalCals = [];
 async function syncGoogle() {
   const s = store.get();
@@ -1089,12 +1051,6 @@ function viewSettings() {
         </div>
         <button class="btn" style="min-height:40px;padding:0 16px" id="btn-succ">편집</button>
       </div>
-      <div class="row">
-        <div class="row-main">
-          <div class="row-title">캘린더로 내보내기</div>
-        </div>
-        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-ics">.ics</button>
-      </div>
     </div>
     <div class="card">
       <p class="card-title">운동 설정</p>
@@ -1163,7 +1119,6 @@ function viewSettings() {
   });
 
   $("#btn-sched").addEventListener("click", openScheduleEdit);
-  $("#btn-ics").addEventListener("click", () => { downloadICS(); toast("캘린더 파일을 내보냈습니다. 구글 캘린더에서 가져오세요"); });
 
   $("#gc-id")?.addEventListener("change", () => { st.gcalClientId = $("#gc-id").value.trim(); store.save(); });
   $("#gc-cal")?.addEventListener("change", () => { st.gcalCalendarId = $("#gc-cal").value; store.save(); });
