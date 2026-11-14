@@ -1087,6 +1087,11 @@ function viewSettings() {
         <input type="text" readonly value="${esc(gcal.publicIcsUrl(st.gcalNudgeId))}" id="gc-url" style="min-height:40px;font-size:12px">
         <button class="btn" style="min-height:40px;padding:0 14px;flex:none" id="btn-gc-copy">복사</button>
       </div>
+      <div class="row" style="margin-top:6px">
+        <div class="row-main"><div class="row-title">Apple 캘린더에서 구독</div></div>
+        <button class="btn primary" style="min-height:40px;padding:0 16px" id="btn-gc-sub">구독</button>
+      </div>
+      <p class="muted">구독 버튼을 누르면 기기의 구독 확인 창이 열립니다. 열리지 않으면 주소를 복사해 직접 추가하세요.</p>
       <p class="muted">주소를 아는 사람은 누구나 이 캘린더를 읽을 수 있습니다.</p>` : ""}` : ""}
     </div>
   `;
@@ -1159,6 +1164,13 @@ function viewSettings() {
       $("#gc-url")?.select();
       toast("주소를 길게 눌러 복사하세요");
     }
+  });
+
+  $("#btn-gc-sub")?.addEventListener("click", () => {
+    const url = $("#gc-url")?.value || "";
+    if (!url) return;
+    const webcal = "webcal://" + url.replace(/^https?:\/\//, "");
+    try { location.href = webcal; } catch {}
   });
 
   $("#btn-goal").addEventListener("click", () => {
