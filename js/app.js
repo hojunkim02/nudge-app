@@ -966,6 +966,7 @@ function openScheduleEdit() {
   });
 }
 
+let nudgeRecovering = false;
 async function finishConnect(st) {
   toast("nudge 캘린더를 준비하는 중…", 1500);
   const calId = await ensureNudgeCalendar(st);
@@ -1128,6 +1129,11 @@ function viewSettings() {
   titleEl.textContent = "설정";
   subEl.textContent = "화면 · 학습 · 운동";
   gcal.preload();
+  if (st.gcalEnabled && gcal.hasToken() && !st.gcalNudgeId && !nudgeRecovering) {
+    // 로그인 직후 페이지가 재시작되어 캘린더 준비가 끊긴 경우 자동 복구
+    nudgeRecovering = true;
+    finishConnect(st).catch(() => {}).finally(() => { nudgeRecovering = false; });
+  }
 
   ["system", "light", "dark"].forEach((mode) => {
     $("#th-" + mode).addEventListener("click", () => {
