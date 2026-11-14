@@ -972,6 +972,7 @@ function openScheduleEdit() {
 }
 
 let connectBusy = false;
+let connectChecked = false; // 재시작 후 캘린더 검증 1회 실행 플래그
 async function finishConnect(st) {
   if (connectBusy) return; // 로그인 직후 render()의 자동 복구와 동시에 실행되는 것 방지
   connectBusy = true;
@@ -1344,6 +1345,13 @@ export function render(scrollTop = false) {
   {
     const st = store.get().settings;
     if (st.gcalEnabled && gcal.hasToken() && !st.gcalNudgeId) finishConnect(st).catch(() => {});
+    else if (!connectChecked && st.gcalEnabled && gcal.hasToken()) {
+      // 재시작 직후 1회: 저장된 nudge 캘린더가 사용자가 삭제/삭제 보류한 상태인지 검증해 자동 복구
+      connectChecked = true;
+      ensureNudgeCalendar(st)
+        .then(() => render())
+        .catch(() => render()); // 토큰 만료 시 api()가 clearToken → 재로그인 버튼 노출됨
+    }
   }
   VIEWS[currentView]();
   if (currentView !== prevTab) {

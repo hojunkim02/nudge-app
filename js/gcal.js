@@ -99,7 +99,7 @@ async function api(path, opts = {}) {
     ...opts,
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", ...(opts.headers || {}) },
   });
-  if (res.status === 401) { accessToken = null; throw new Error("Google 로그인이 만료되었습니다. 다시 연결해 주세요"); }
+  if (res.status === 401) { clearToken(); throw new Error("Google 로그인이 만료되었습니다. 다시 연결해 주세요"); }
   if (res.status === 204) return null;
   if (!res.ok) {
     let j = null;
