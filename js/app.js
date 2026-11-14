@@ -1041,9 +1041,7 @@ function viewSettings() {
         <div class="row-main"><div class="row-title">동기화</div></div>
         <button class="switch ${st.gcalEnabled ? "on" : ""}" id="sw-gcal" role="switch" aria-checked="${st.gcalEnabled}"></button>
       </div>
-      ${st.gcalEnabled ? `
-      <button class="btn primary block" id="btn-gcal-login">Google 로그인</button>
-      <p class="muted">${gcal.hasToken() ? "연결됨 · Calendar API 사용 준비 완료" : "Google 계정으로 로그인하면 Calendar API에 연결됩니다."}</p>` : ""}
+      ${st.gcalEnabled ? `<p class="muted">${gcal.hasToken() ? "연결됨 · Calendar API 사용 준비 완료" : "Google 로그인 창을 여는 중…"}</p>` : ""}
     </div>
   `;
 
@@ -1083,19 +1081,24 @@ function viewSettings() {
 
   $("#btn-sched").addEventListener("click", openScheduleEdit);
 
-  $("#sw-gcal")?.addEventListener("click", () => {
-    st.gcalEnabled = !st.gcalEnabled;
-    store.save();
-    render();
-  });
-  $("#btn-gcal-login")?.addEventListener("click", async () => {
+  $("#sw-gcal")?.addEventListener("click", async () => {
+    if (st.gcalEnabled) { st.gcalEnabled = false; store.save(); render(); return; }
     const cid = gcal.BUILTIN_CLIENT_ID || st.gcalClientId;
     if (!cid) { toast("클라이언트 ID가 설정되지 않았습니다"); return; }
+    st.gcalEnabled = true;
+    store.save();
+    render();
+    if (gcal.hasToken()) return;
     try {
       await gcal.login(cid);
-      render();
       toast("Google 계정에 연결되었습니다");
-    } catch (e) { toast(e.message, 5000); }
+      render();
+    } catch (e) {
+      st.gcalEnabled = false;
+      store.save();
+      render();
+      toast(e.message || "Google 로그인이 취소되었습니다", 4000);
+    }
   });
 
   $("#btn-goal").addEventListener("click", () => {

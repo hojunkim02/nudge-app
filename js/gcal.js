@@ -31,12 +31,20 @@ function loadGsi() {
 export async function login(clientId) {
   await loadGsi();
   return new Promise((resolve, reject) => {
+    let settled = false;
     const tc = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: "https://www.googleapis.com/auth/calendar.events",
       callback: (resp) => {
+        if (settled) return;
+        settled = true;
         if (resp.error) reject(new Error("Google 로그인 실패: " + resp.error));
         else { accessToken = resp.access_token; resolve(); }
+      },
+      error_callback: () => {
+        if (settled) return;
+        settled = true;
+        reject(new Error("Google 로그인이 취소되었습니다"));
       },
     });
     tc.requestAccessToken();
