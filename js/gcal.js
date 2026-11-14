@@ -12,6 +12,7 @@ export function hasToken() { return !!accessToken; }
 function loadGsi() {
   return new Promise((resolve, reject) => {
     if (window.google?.accounts?.oauth2) return resolve();
+    const ready = () => (window.google?.accounts?.oauth2 ? resolve() : reject(new Error("Google 로그인 스크립트를 불러오지 못했습니다")));
     if (document.querySelector('script[src*="accounts.google.com/gsi"]')) {
       const wait = setInterval(() => {
         if (window.google?.accounts?.oauth2) { clearInterval(wait); resolve(); }
@@ -22,10 +23,14 @@ function loadGsi() {
     const s = document.createElement("script");
     s.src = "https://accounts.google.com/gsi/client";
     s.async = true;
-    s.onload = () => resolve();
+    s.onload = () => ready();
     s.onerror = () => reject(new Error("Google 로그인 스크립트를 불러오지 못했습니다"));
     document.head.appendChild(s);
   });
+}
+/* 팝업은 사용자 탭 제스처 안에서 열려야 하므로, 설정 화면 진입 시 미리 스크립트를 로드해 둔다 */
+export function preload() {
+  loadGsi().catch(() => {});
 }
 
 export async function login(clientId) {
@@ -41,10 +46,17 @@ export async function login(clientId) {
         if (resp.error) reject(new Error("Google 로그인 실패: " + resp.error));
         else { accessToken = resp.access_token; resolve(); }
       },
-      error_callback: () => {
+      error_callback: (err) => {
         if (settled) return;
         settled = true;
-        reject(new Error("Google 로그인이 취소되었습니다"));
+        const t = err && err.type;
+        if (t === "popup_failed_to_open" || t === "popup_open_blocked") {
+          reject(new Error("로그인 창이 차단되었습니다. 사파리에서 페이지를 열어 다시 시도하세요"));
+        } else if (t === "popup_closed_by_user" || t === "popup_closed") {
+          reject(new Error("Google 로그인이 취소되었습니다"));
+        } else {
+          reject(new Error("Google 로그인을 시작하지 못했습니다"));
+        }
       },
     });
     tc.requestAccessToken();
@@ -61,7 +73,11 @@ async function api(path, opts = {}) {
   });
   if (res.status === 401) { accessToken = null; throw new Error("Google 로그인이 만료되었습니다. 다시 연결해 주세요"); }
   if (res.status === 204) return null;
-  if (!res.ok) throw new Error(`Google API 오류 (${res.status})`);
+  if (!res.ok) {
+    let detail = "";
+    try { const j = await res.json(); detail = j?.error?.message ? ` — ${j.error.message}` : ""; } catch {}
+    throw new Error(`Google API 오류 ${res.status}${detail}`);
+  }
   return res.json();
 }
 

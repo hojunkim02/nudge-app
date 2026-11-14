@@ -1098,6 +1098,7 @@ function viewSettings() {
 
   titleEl.textContent = "설정";
   subEl.textContent = "화면 · 학습 · 운동";
+  gcal.preload();
 
   ["system", "light", "dark"].forEach((mode) => {
     $("#th-" + mode).addEventListener("click", () => {
