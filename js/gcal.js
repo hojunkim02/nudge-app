@@ -1,6 +1,10 @@
 /* Nudge — Google Calendar 동기화 (Google Identity Services OAuth + Calendar API v3)
    정적 PWA에서 안전하게 쓰는 방식: 클라이언트 시크릿 없이 OAuth 토큰만 사용. */
 
+/* 배포자가 한 번만 채워 넣으면 사용자는 구글 로그인만으로 연결됩니다.
+   (비워 두면 설정 화면의 클라이언트 ID 입력란이 표시됩니다) */
+export const BUILTIN_CLIENT_ID = "";
+
 let accessToken = null;
 
 export function hasToken() { return !!accessToken; }

@@ -1069,7 +1069,9 @@ function viewSettings() {
     </div>
     <div class="card">
       <p class="card-title">구글 캘린더 동기화</p>
-      <div class="field"><label>OAuth 클라이언트 ID</label><input type="text" id="gc-id" value="${esc(st.gcalClientId)}" placeholder="Google Cloud Console에서 발급" autocomplete="off"></div>
+      ${gcal.BUILTIN_CLIENT_ID
+        ? `<p class="muted">이 앱에는 연결 정보가 내장되어 있습니다. 연결 버튼만 누르면 됩니다.</p>`
+        : `<div class="field"><label>OAuth 클라이언트 ID</label><input type="text" id="gc-id" value="${esc(st.gcalClientId)}" placeholder="Google Cloud Console에서 발급" autocomplete="off"></div>`}
       <div class="field"><label>캘린더</label>
         <select id="gc-cal" style="width:100%;min-height:42px">
           <option value="">연결 후 선택</option>
@@ -1125,9 +1127,9 @@ function viewSettings() {
   $("#gc-id")?.addEventListener("change", () => { st.gcalClientId = $("#gc-id").value.trim(); store.save(); });
   $("#gc-cal")?.addEventListener("change", () => { st.gcalCalendarId = $("#gc-cal").value; store.save(); });
   $("#btn-gc-connect")?.addEventListener("click", async () => {
-    const cid = $("#gc-id").value.trim();
+    const cid = $("#gc-id")?.value.trim() || st.gcalClientId || gcal.BUILTIN_CLIENT_ID;
     if (!cid) { toast("OAuth 클라이언트 ID를 입력해 주세요"); return; }
-    st.gcalClientId = cid; store.save();
+    if ($("#gc-id")) { st.gcalClientId = cid; store.save(); }
     try {
       await gcal.login(cid);
       gcalCals = await gcal.listCalendars();
@@ -1148,7 +1150,7 @@ function viewSettings() {
     `, (sheet, close) => {
       $("#ce-date", sheet).value = store.dateKey();
       $("#ce-save", sheet).addEventListener("click", async () => {
-        const clientId = $("#gc-id")?.value.trim() || st.gcalClientId;
+        const clientId = $("#gc-id")?.value.trim() || st.gcalClientId || gcal.BUILTIN_CLIENT_ID;
         if (!clientId) { toast("먼저 OAuth 클라이언트 ID를 입력해 주세요"); return; }
         if (!st.gcalCalendarId) { toast("캘린더를 선택해 주세요"); return; }
         const body = gcal.buildCustomEvent({
@@ -1170,7 +1172,7 @@ function viewSettings() {
   });
 
   $("#btn-gc-sync")?.addEventListener("click", async () => {
-    const cid = $("#gc-id")?.value.trim() || st.gcalClientId;
+    const cid = $("#gc-id")?.value.trim() || st.gcalClientId || gcal.BUILTIN_CLIENT_ID;
     if (!cid) { toast("OAuth 클라이언트 ID를 입력해 주세요"); return; }
     if (!st.gcalCalendarId) { toast("캘린더를 선택해 주세요"); return; }
     toast("동기화 중…", 1500);
