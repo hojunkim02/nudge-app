@@ -977,7 +977,7 @@ async function finishConnect(st) {
   if (connectBusy) return; // 로그인 직후 render()의 자동 복구와 동시에 실행되는 것 방지
   connectBusy = true;
   try {
-    toast("nudge 캘린더를 준비하는 중…", 1500);
+    toast("Nudge 캘린더를 준비하는 중…", 1500);
     await ensureNudgeCalendar(st);
     render(); // 캘린더가 생기는 즉시 '이동' 버튼 활성화
     toast("구글 캘린더에 연결되었습니다"); // 연결 확인만 — 일정 업로드는 아직 안 함
@@ -986,7 +986,7 @@ async function finishConnect(st) {
   }
 }
 async function connectGoogle(st) {
-  const cid = gcal.BUILTIN_CLIENT_ID || st.gcalClientId;
+  const cid = gcal.BUILTIN_CLIENT_ID;
   if (!cid) { toast("클라이언트 ID가 설정되지 않았습니다"); return false; }
   st.gcalEnabled = true;
   store.save();
@@ -994,21 +994,11 @@ async function connectGoogle(st) {
   try {
     // 스위치를 켤 때는 저장된 토큰에 기대지 않고 항상 새로 로그인한다 (단순·확실)
     await gcal.login(cid);
-    toast("Google 계정에 연결되었습니다");
-    render();
-    try {
-      await finishConnect(st);
-    } catch (e) {
-      // 토큰 만료: await 이후 팝업을 열면 iOS에서 제스처가 소실되어 차단되므로
-      // 자동 재로그인 대신 '다시 로그인' 버튼(사용자 탭 제스처에서 팝업)으로 유도
-      if (!e.message.includes("만료")) throw e;
-      gcal.clearToken();
-      throw new Error("Google 로그인이 만료되었습니다. 아래 '다시 로그인' 버튼을 눌러 주세요");
-    }
+    await finishConnect(st); // Nudge 캘린더 확인/생성 + 연결 확인 토스트
     return true;
   } catch (e) {
-    // 만료 계열 오류는 스위치를 유지한 채 '다시 로그인' 버튼 노출 (취소/거부는 OFF 유지)
-    if (!/만료/.test(e.message || "")) st.gcalEnabled = false;
+    // 어떤 실패든(취소·권한 거부·API 오류) 스위치를 OFF로 되돌린다
+    st.gcalEnabled = false;
     store.save();
     render();
     toast(e.message || "Google 로그인이 취소되었습니다", 4000);
@@ -1024,8 +1014,8 @@ async function ensureNudgeCalendar(st) {
     calId = "";
   }
   if (!calId) {
-    const found = await gcal.findCalendarByName("nudge");
-    calId = found ? found.id : (await gcal.createCalendar("nudge")).id;
+    const found = await gcal.findCalendarByName("Nudge");
+    calId = found ? found.id : (await gcal.createCalendar("Nudge")).id;
     await gcal.makePublic(calId);
     st.gcalNudgeId = calId;
   }
@@ -1186,7 +1176,6 @@ function viewSettings() {
       // OFF 시 로그인 관련 저장 상태를 전부 초기화 — 캐시 삭제 후 실행과 동일한 깨끗한 상태로 만든다
       st.gcalEnabled = false;
       st.gcalNudgeId = "";
-      st.gcalSyncedAt = "";
       gcal.clearToken();
       store.save();
       render();
