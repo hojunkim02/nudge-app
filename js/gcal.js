@@ -5,9 +5,31 @@
    (비워 두면 설정 화면의 클라이언트 ID 입력란이 표시됩니다) */
 export const BUILTIN_CLIENT_ID = "938328198458-nbal2ejhmff2ec8j5fu2uo6spbc498o7.apps.googleusercontent.com";
 
+const TOKEN_KEY = "nudge.gcal.token";
 let accessToken = null;
+let loggingIn = false;
 
-export function hasToken() { return !!accessToken; }
+function saveToken(token, expiresInSec) {
+  accessToken = token;
+  try {
+    localStorage.setItem(TOKEN_KEY, JSON.stringify({ token, exp: Date.now() + (expiresInSec || 3600) * 1000 }));
+  } catch {}
+}
+function loadToken() {
+  if (accessToken) return accessToken;
+  try {
+    const raw = JSON.parse(localStorage.getItem(TOKEN_KEY) || "null");
+    if (raw && raw.token && raw.exp > Date.now() + 60000) accessToken = raw.token;
+    else if (raw) localStorage.removeItem(TOKEN_KEY);
+  } catch {}
+  return accessToken;
+}
+export function hasToken() { return !!loadToken(); }
+export function isLoggingIn() { return loggingIn; }
+export function clearToken() {
+  accessToken = null;
+  try { localStorage.removeItem(TOKEN_KEY); } catch {}
+}
 
 function loadGsi() {
   return new Promise((resolve, reject) => {
@@ -37,25 +59,24 @@ export async function login(clientId) {
   await loadGsi();
   return new Promise((resolve, reject) => {
     let settled = false;
+    const finish = (fn, arg) => { if (settled) return; settled = true; loggingIn = false; fn(arg); };
+    const timeout = setTimeout(() => finish(reject, new Error("Google 로그인 응답이 없습니다. 다시 시도해 주세요")), 120000);
+    loggingIn = true;
     const tc = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events",
       callback: (resp) => {
-        if (settled) return;
-        settled = true;
-        if (resp.error) reject(new Error("Google 로그인 실패: " + resp.error));
-        else { accessToken = resp.access_token; resolve(); }
+        if (resp.error) finish(reject, new Error("Google 로그인 실패: " + resp.error));
+        else { saveToken(resp.access_token, resp.expires_in); finish(resolve); }
       },
       error_callback: (err) => {
-        if (settled) return;
-        settled = true;
         const t = err && err.type;
         if (t === "popup_failed_to_open" || t === "popup_open_blocked") {
-          reject(new Error("로그인 창이 차단되었습니다. 사파리에서 페이지를 열어 다시 시도하세요"));
+          finish(reject, new Error("로그인 창이 차단되었습니다. 사파리에서 페이지를 열어 다시 시도하세요"));
         } else if (t === "popup_closed_by_user" || t === "popup_closed") {
-          reject(new Error("Google 로그인이 취소되었습니다"));
+          finish(reject, new Error("Google 로그인이 취소되었습니다"));
         } else {
-          reject(new Error("Google 로그인을 시작하지 못했습니다"));
+          finish(reject, new Error("Google 로그인을 시작하지 못했습니다"));
         }
       },
     });
@@ -66,7 +87,7 @@ export async function login(clientId) {
 const API = "https://www.googleapis.com/calendar/v3";
 
 async function api(path, opts = {}) {
-  if (!accessToken) throw new Error("먼저 Google 계정에 연결해 주세요");
+  if (!loadToken()) throw new Error("먼저 Google 계정에 연결해 주세요");
   const res = await fetch(API + path, {
     ...opts,
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", ...(opts.headers || {}) },

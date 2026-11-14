@@ -966,6 +966,39 @@ function openScheduleEdit() {
   });
 }
 
+async function finishConnect(st) {
+  toast("nudge 캘린더를 준비하는 중…", 1500);
+  const calId = await ensureNudgeCalendar(st);
+  const n = await syncNudge(calId);
+  toast(`nudge 캘린더가 준비되었습니다 (${n}개 항목)`);
+  render();
+}
+async function connectGoogle(st) {
+  const cid = gcal.BUILTIN_CLIENT_ID || st.gcalClientId;
+  if (!cid) { toast("클라이언트 ID가 설정되지 않았습니다"); return false; }
+  st.gcalEnabled = true;
+  store.save();
+  render();
+  try {
+    if (!gcal.hasToken()) await gcal.login(cid);
+    try {
+      await finishConnect(st);
+    } catch (e) {
+      if (!e.message.includes("만료")) throw e;
+      gcal.clearToken();
+      await gcal.login(cid);
+      await finishConnect(st);
+    }
+    return true;
+  } catch (e) {
+    st.gcalEnabled = false;
+    store.save();
+    render();
+    toast(e.message || "Google 로그인이 취소되었습니다", 4000);
+    return false;
+  }
+}
+
 async function ensureNudgeCalendar(st) {
   let calId = st.gcalNudgeId;
   if (!calId) {
@@ -1080,7 +1113,8 @@ function viewSettings() {
         <div class="row-main"><div class="row-title">동기화</div></div>
         <button class="switch ${st.gcalEnabled ? "on" : ""}" id="sw-gcal" role="switch" aria-checked="${st.gcalEnabled}"></button>
       </div>
-      ${st.gcalEnabled ? `<p class="muted">${gcal.hasToken() ? "연결됨 · nudge 캘린더가 구글에 있습니다" : "Google 로그인 창을 여는 중…"}</p>
+      ${st.gcalEnabled ? `<p class="muted">${gcal.isLoggingIn() ? "Google 로그인 창이 열려 있습니다…" : gcal.hasToken() ? "연결됨 · nudge 캘린더가 구글에 있습니다" : "로그인이 완료되지 않았거나 만료되었습니다."}</p>
+      ${st.gcalEnabled && !gcal.hasToken() && !gcal.isLoggingIn() ? `<button class="btn primary block" id="btn-gc-relogin">다시 로그인</button>` : ""}
       ${st.gcalNudgeId ? `
       <p class="muted">외부 캘린더(Apple 캘린더 등) 구독 주소:</p>
       <div style="display:flex;gap:8px;align-items:center">
@@ -1135,26 +1169,9 @@ function viewSettings() {
 
   $("#sw-gcal")?.addEventListener("click", async () => {
     if (st.gcalEnabled) { st.gcalEnabled = false; store.save(); render(); return; }
-    const cid = gcal.BUILTIN_CLIENT_ID || st.gcalClientId;
-    if (!cid) { toast("클라이언트 ID가 설정되지 않았습니다"); return; }
-    st.gcalEnabled = true;
-    store.save();
-    render();
-    if (gcal.hasToken()) return;
-    try {
-      await gcal.login(cid);
-      toast("nudge 캘린더를 준비하는 중…", 1500);
-      const calId = await ensureNudgeCalendar(st);
-      const n = await syncNudge(calId);
-      toast(`nudge 캘린더가 준비되었습니다 (${n}개 항목)`);
-      render();
-    } catch (e) {
-      st.gcalEnabled = false;
-      store.save();
-      render();
-      toast(e.message || "Google 로그인이 취소되었습니다", 4000);
-    }
+    await connectGoogle(st);
   });
+  $("#btn-gc-relogin")?.addEventListener("click", () => connectGoogle(st));
 
   $("#btn-gc-copy")?.addEventListener("click", async () => {
     const url = $("#gc-url")?.value || "";
