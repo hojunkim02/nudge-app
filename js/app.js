@@ -295,6 +295,7 @@ function viewToday() {
     row.addEventListener("click", (e) => {
       if (!e.target.closest(".check")) return;
       const on = store.toggleCheck(key, row.dataset.check);
+      syncCheckNow(key, row.dataset.check, on);
       row.classList.toggle("done", on);
       const snap = store.dayChecks(key);
       const done2 = checks.reduce((a, c) => a + (c.id === row.dataset.check ? on : !!snap[c.id]), 0);
@@ -467,6 +468,7 @@ function viewStudy() {
       <div class="subject-nav" id="subject-nav">
         ${s.subjects.map((sub) => `<button class="chip" data-goto-subject="${sub.id}">${esc(sub.name)}</button>`).join("")}
       </div>
+      <button class="btn compact" id="btn-new-lecture" style="background:var(--accent);color:var(--on-fill);flex:none">새 강의</button>
       <button class="btn icon-btn" id="btn-add-subject" aria-label="과목 추가" style="min-width:36px;min-height:36px;flex:none">${adding.level === "subject" ? "취소" : PLUS_SVG}</button>
     </div>
     ${adding.level === "subject" ? `<div class="card">${ADD_ROW("qa-subject")}</div>` : ""}
@@ -506,7 +508,7 @@ function viewStudy() {
               <div class="row-main">${editing.level === "chapter" && editing.id === ch.id
                 ? `<input type="text" class="ren" id="ren-chapter" value="${esc(ch.name)}" style="font-size:14px">`
                 : `<div class="row-title edit-tap" style="font-size:14px" data-edit-chapter="${ch.id}">${esc(ch.name)}</div>`}</div>
-              <button class="btn compact" style="font-size:13px;background:var(--accent);color:var(--on-fill)" data-add-lecture="${ch.id}">${adding.level === "lecture" && adding.id === ch.id ? "취소" : "새 강의"}</button>
+              <button class="btn icon-btn" style="min-width:34px;min-height:34px;background:var(--accent);color:var(--on-fill)" aria-label="강의 추가" data-add-lecture="${ch.id}">${adding.level === "lecture" && adding.id === ch.id ? "취소" : PLUS_SVG}</button>
             </div>
           </div>
           ${adding.level === "lecture" && adding.id === ch.id ? `<div style="padding-left:14px">${ADD_ROW("qa-lecture")}</div>` : ""}
@@ -559,6 +561,37 @@ function viewStudy() {
     confirm?.addEventListener("click", onAdd);
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") onAdd(); });
   };
+
+  $("#btn-new-lecture").addEventListener("click", () => {
+    if (!s.subjects.length) { toast("먼저 과목을 추가해 주세요"); return; }
+    const subOpts = s.subjects.map((sub) => `<option value="${sub.id}">${esc(sub.name)}</option>`).join("");
+    openSheet(`
+      <h2>새 강의</h2>
+      <div class="field"><label>과목</label><select id="nl-subject">${subOpts}</select></div>
+      <div class="field"><label>챕터</label><select id="nl-chapter"></select></div>
+      <div class="field"><label>강의 이름</label><input type="text" id="nl-name" placeholder="예: 1강"></div>
+      <button class="btn primary block" id="btn-nl-save">추가</button>
+    `, (sheet, close) => {
+      const subSel = $("#nl-subject", sheet);
+      const chSel = $("#nl-chapter", sheet);
+      const fill = () => {
+        const sub = s.subjects.find((x) => x.id === subSel.value);
+        chSel.innerHTML = sub?.chapters.length
+          ? sub.chapters.map((ch) => `<option value="${ch.id}">${esc(ch.name)}</option>`).join("")
+          : `<option value="">(챕터 없음 — 먼저 챕터를 추가해 주세요)</option>`;
+      };
+      subSel.addEventListener("change", fill);
+      fill();
+      $("#btn-nl-save", sheet).addEventListener("click", () => {
+        const name = $("#nl-name", sheet).value.trim();
+        if (!name) return;
+        if (!chSel.value) { toast("먼저 챕터를 추가해 주세요"); return; }
+        store.addLecture(chSel.value, name);
+        close();
+        toast("강의를 추가했습니다");
+      });
+    });
+  });
 
   $("#btn-add-subject").addEventListener("click", () => {
     if (adding.level === "subject") { adding.level = null; render(); return; }
@@ -1056,6 +1089,23 @@ async function syncDayToGcal(key) {
   return jobs.length;
 }
 const yesterdayKey = () => store.dateKey(new Date(Date.now() - 864e5));
+function syncCheckNow(key, id, on) {
+  const s = store.get();
+  const { gcalEnabled, gcalNudgeId, gcalMode } = s.settings;
+  if (gcalMode !== "always" || !gcalEnabled || !gcalNudgeId || !gcal.hasToken()) return;
+  const it = s.schedule.find((c) => c.id === id);
+  const nid = `day:${key}:${id}`;
+  const map = s.gcalMap;
+  if (on && it) {
+    gcal.upsertEvent(gcalNudgeId, map[nid], gcal.buildDayEvent(key, it.title, it.time, nid))
+      .then((ev) => { map[nid] = ev.id; store.save(); })
+      .catch((e) => toast(e.message || "구글 캘린더 반영 실패", 4000));
+  } else if (map[nid]) {
+    gcal.deleteEvent(gcalNudgeId, map[nid])
+      .then((ok) => { if (ok) { delete map[nid]; store.save(); } })
+      .catch(() => {});
+  }
+}
 
 function viewSettings() {
   const s = store.get();
@@ -1133,6 +1183,13 @@ function viewSettings() {
         <button class="switch ${st.gcalEnabled ? "on" : ""}" id="sw-gcal" role="switch" aria-checked="${st.gcalEnabled}"></button>
       </div>
       ${st.gcalEnabled && !gcal.hasToken() && !gcal.isLoggingIn() ? `<button class="btn primary block" id="btn-gc-relogin">다시 로그인</button>` : ""}
+      <div class="row">
+        <div class="row-main"><div class="row-title">동기화 시점</div></div>
+        <div class="segment" style="margin:0;width:180px">
+          <button class="${st.gcalMode !== "always" ? "active" : ""}" id="gm-daily">매일</button>
+          <button class="${st.gcalMode === "always" ? "active" : ""}" id="gm-always">매번</button>
+        </div>
+      </div>
       <div class="row" style="margin-top:4px">
         <div class="row-main"><div class="row-title">캘린더 구독</div></div>
         <button class="btn compact" id="btn-gc-sub" ${st.gcalEnabled && st.gcalNudgeId ? "" : "disabled"}>이동</button>
@@ -1189,6 +1246,8 @@ function viewSettings() {
     await connectGoogle(st);
   });
   $("#btn-gc-relogin")?.addEventListener("click", () => connectGoogle(st));
+  $("#gm-daily")?.addEventListener("click", () => { st.gcalMode = "daily"; store.save(); render(); });
+  $("#gm-always")?.addEventListener("click", () => { st.gcalMode = "always"; store.save(); render(); });
 
   $("#btn-gc-sub")?.addEventListener("click", () => {
     if (!st.gcalEnabled || !st.gcalNudgeId) return;

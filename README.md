@@ -6,7 +6,7 @@
 
 설치 없이, 로그인 없이 — iPhone 홈 화면에서 바로 쓰는 나만의 학습 루틴 관리자
 
-[데모 만나보기](https://hojunkim02.github.io/nudge-app/) · [개인정보처리방침](https://hojunkim02.github.io/nudge-app/privacy.html) · [서비스 이용약관](https://hojunkim02.github.io/nudge-app/terms.html)
+[홈페이지](https://hojunkim02.github.io/nudge-app/) · [개인정보처리방침](https://hojunkim02.github.io/nudge-app/privacy.html) · [서비스 이용약관](https://hojunkim02.github.io/nudge-app/terms.html)
 
 </div>
 
@@ -33,15 +33,11 @@
 
 ## 시작하기
 
-1. iPhone Safari로 **[데모 사이트](https://hojunkim02.github.io/nudge-app/)** 접속
+1. iPhone Safari로 **[홈페이지](https://hojunkim02.github.io/nudge-app/)** 접속
 2. 공유 버튼 → **홈 화면에 추가**
 3. 홈 화면의 Nudge 아이콘으로 실행
 
 > 💡 데모 버전에서는 한 달치 예시 데이터가 채워진 상태로 시작합니다.
-
-## 기술
-
-의존성 없는 바닐라 JS(ES 모듈) + CSS, 빌드 단계 없음. PWA(매니페스트 + 서비스 워커)로 오프라인 앱 셸을 제공하고, [Fluent 2 (iOS)](https://fluent2.microsoft.design/components/ios) 디자인 패턴을 참고했습니다. 개발·배포 규칙은 [DEVELOPMENT.md](DEVELOPMENT.md)를 보세요.
 
 ## 라이선스
 
