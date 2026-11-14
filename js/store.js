@@ -261,14 +261,6 @@ export function sessionsInRange(fromKey, toKey) {
 export function minutesOn(key) {
   return state.sessions.filter((s) => s.date === key && s.status === "finalized").reduce((a, s) => a + s.finalMin, 0);
 }
-export function minutesOnSplit(key) {
-  let reg = 0, extra = 0;
-  for (const s of state.sessions) {
-    if (s.date !== key || s.status !== "finalized") continue;
-    if (s.kind === "extra") extra += s.finalMin; else reg += s.finalMin;
-  }
-  return { reg, extra };
-}
 
 /* ── lectures ───────────────────────────── */
 export function addSubject(name) {

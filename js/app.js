@@ -807,15 +807,21 @@ function viewStats() {
   const stats = store.lectureStats();
   const goalMin = 18 * 60 * Math.ceil(days / 7);
   const pct = stats.total ? Math.round((stats.done / stats.total) * 100) : 0;
+  const wDone = new Set(store.get().workout.history.filter((h) => h.done).map((h) => h.date));
   const wkDone = Array.from({ length: days }, (_, i) => {
     const d = new Date(from); d.setDate(from.getDate() + i);
-    return store.workoutDoneOn(store.dateKey(d));
+    return wDone.has(store.dateKey(d));
   }).filter(Boolean).length;
+  const splitBy = {};
+  for (const x of sessions) {
+    const d = (splitBy[x.date] ??= { reg: 0, extra: 0 });
+    d[x.kind === "extra" ? "extra" : "reg"] += x.finalMin;
+  }
 
   const bars = Array.from({ length: days }, (_, i) => {
     const d = new Date(from); d.setDate(from.getDate() + i);
     const k = store.dateKey(d);
-    const { reg, extra } = store.minutesOnSplit(k);
+    const { reg, extra } = splitBy[k] ?? { reg: 0, extra: 0 };
     const rh = Math.min(100, (reg / 240) * 100);
     const eh = Math.min(100, (extra / 240) * 100);
     return `<div style="flex:1 0 16px;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:14px">
@@ -1011,34 +1017,6 @@ async function ensureNudgeCalendar(st) {
   store.save();
   return calId;
 }
-async function syncNudge(calId) {
-  const s = store.get();
-  const map = s.gcalMap;
-  const keep = new Set();
-  const jobs = [];
-  for (const it of s.schedule) {
-    const nid = "sched:" + it.id;
-    const body = gcal.buildScheduleEvent(it);
-    if (!body) continue;
-    keep.add(nid);
-    jobs.push(gcal.upsertEvent(calId, map[nid], body).then((ev) => { map[nid] = ev.id; }));
-  }
-  for (const sess of s.sessions) {
-    const nid = "sess:" + sess.id;
-    const body = gcal.buildSessionEvent(sess);
-    if (!body) continue;
-    keep.add(nid);
-    jobs.push(gcal.upsertEvent(calId, map[nid], body).then((ev) => { map[nid] = ev.id; }));
-  }
-  const LIMIT = 3;
-  for (let i = 0; i < jobs.length; i += LIMIT) await Promise.all(jobs.slice(i, i + LIMIT));
-  for (const [nid, eid] of Object.entries({ ...map })) {
-    if (!keep.has(nid) && await gcal.deleteEvent(calId, eid)) delete map[nid];
-  }
-  store.save();
-  return jobs.length;
-}
-
 async function syncDayToGcal(key) {
   const s = store.get();
   const { gcalEnabled, gcalNudgeId } = s.settings;

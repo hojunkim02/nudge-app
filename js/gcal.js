@@ -178,32 +178,4 @@ export async function deleteEvent(calendarId, eventId) {
   }
 }
 
-/* ── 이벤트 본문 생성 (순수 함수) ── */
-const GCAL_DOW = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
 
-export function buildScheduleEvent(it, now = new Date()) {
-  const m = String(it.time).match(/(\d{1,2}):(\d{2})\D+(\d{1,2}):(\d{2})/);
-  if (!m || !it.days.length) return null;
-  const start = new Date(now);
-  start.setDate(start.getDate() + ((Math.min(...it.days) - start.getDay() + 7) % 7 || 7));
-  start.setHours(+m[1], +m[2], 0, 0);
-  const end = new Date(start);
-  end.setHours(+m[3], +m[4], 0, 0);
-  return {
-    summary: it.title,
-    start: { dateTime: start.toISOString(), timeZone: "Asia/Seoul" },
-    end: { dateTime: end.toISOString(), timeZone: "Asia/Seoul" },
-    recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${it.days.map((d) => GCAL_DOW[d]).join(",")}`],
-    extendedProperties: { private: { nudgeId: "sched:" + it.id } },
-  };
-}
-
-export function buildSessionEvent(sess) {
-  if (sess.status !== "finalized") return null;
-  return {
-    summary: `${sess.label || "자습"} ${sess.finalMin}분`,
-    start: { date: sess.date },
-    end: { date: sess.date },
-    extendedProperties: { private: { nudgeId: "sess:" + sess.id } },
-  };
-}
