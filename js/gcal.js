@@ -66,8 +66,15 @@ export async function login(clientId) {
       client_id: clientId,
       scope: "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events",
       callback: (resp) => {
-        if (resp.error) finish(reject, new Error("Google 로그인 실패: " + resp.error));
-        else { saveToken(resp.access_token, resp.expires_in); finish(resolve); }
+        if (resp.error) { finish(reject, new Error("Google 로그인 실패: " + resp.error)); return; }
+        const granted = String(resp.scope || "").split(" ");
+        if (!granted.includes("https://www.googleapis.com/auth/calendar")) {
+          clearToken();
+          finish(reject, new Error("캘린더 접근 동의가 필요합니다. 동의 화면에서 캘린더 권한을 허용해 주세요"));
+          return;
+        }
+        saveToken(resp.access_token, resp.expires_in);
+        finish(resolve);
       },
       error_callback: (err) => {
         const t = err && err.type;
