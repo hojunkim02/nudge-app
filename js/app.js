@@ -980,7 +980,11 @@ async function connectGoogle(st) {
   store.save();
   render();
   try {
-    if (!gcal.hasToken()) await gcal.login(cid);
+    if (!gcal.hasToken()) {
+      await gcal.login(cid);
+      toast("Google 계정에 연결되었습니다");
+      render();
+    }
     try {
       await finishConnect(st);
     } catch (e) {
@@ -1114,7 +1118,10 @@ function viewSettings() {
         <button class="switch ${st.gcalEnabled ? "on" : ""}" id="sw-gcal" role="switch" aria-checked="${st.gcalEnabled}"></button>
       </div>
       ${st.gcalEnabled && !gcal.hasToken() && !gcal.isLoggingIn() ? `<button class="btn primary block" id="btn-gc-relogin">다시 로그인</button>` : ""}
-      ${st.gcalEnabled && st.gcalNudgeId ? `<button class="btn primary block" id="btn-gc-sub" style="margin-top:8px">Apple 캘린더 구독</button>` : ""}
+      <div class="row" style="margin-top:4px">
+        <div class="row-main"><div class="row-title">Apple 캘린더 구독</div></div>
+        <button class="switch ${st.appleSub ? "on" : ""} ${st.gcalEnabled && st.gcalNudgeId ? "" : "dim"}" id="sw-applesub" role="switch" aria-checked="${!!st.appleSub}"></button>
+      </div>
     </div>
   `;
 
@@ -1161,10 +1168,15 @@ function viewSettings() {
   });
   $("#btn-gc-relogin")?.addEventListener("click", () => connectGoogle(st));
 
-  $("#btn-gc-sub")?.addEventListener("click", () => {
-    if (!st.gcalNudgeId) return;
-    const webcal = "webcal://" + gcal.publicIcsUrl(st.gcalNudgeId).replace(/^https?:\/\//, "");
-    try { location.href = webcal; } catch {}
+  $("#sw-applesub")?.addEventListener("click", () => {
+    if (!st.gcalEnabled || !st.gcalNudgeId) { toast("먼저 구글 캘린더 동기화를 켜주세요"); return; }
+    st.appleSub = !st.appleSub;
+    store.save();
+    render();
+    if (st.appleSub) {
+      const webcal = "webcal://" + gcal.publicIcsUrl(st.gcalNudgeId).replace(/^https?:\/\//, "");
+      try { location.href = webcal; } catch {}
+    }
   });
 
   $("#btn-goal").addEventListener("click", () => {

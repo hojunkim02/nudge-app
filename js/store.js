@@ -57,6 +57,7 @@ function defaultState() {
       notify: false,
       successMin: 80,
       gcalEnabled: false,
+      appleSub: false,
       gcalNudgeId: "",
       gcalClientId: "",
       gcalCalendarId: "",
