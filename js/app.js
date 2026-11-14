@@ -1181,7 +1181,16 @@ function viewSettings() {
   $("#btn-sched").addEventListener("click", openScheduleEdit);
 
   $("#sw-gcal")?.addEventListener("click", async () => {
-    if (st.gcalEnabled) { st.gcalEnabled = false; store.save(); render(); return; }
+    if (st.gcalEnabled) {
+      // OFF 시 로그인 관련 저장 상태를 전부 초기화 — 캐시 삭제 후 실행과 동일한 깨끗한 상태로 만든다
+      st.gcalEnabled = false;
+      st.gcalNudgeId = "";
+      st.gcalSyncedAt = "";
+      gcal.clearToken();
+      store.save();
+      render();
+      return;
+    }
     await connectGoogle(st);
   });
   $("#btn-gc-relogin")?.addEventListener("click", () => connectGoogle(st));
@@ -1342,14 +1351,13 @@ export function render(scrollTop = false) {
   clearInterval(tickTimer);
   // 로그인 직후 캘린더 준비가 끊긴 상태면 어느 화면에서든 자동 복구
   {
+    // 재시작 후 1회만: 동기화가 켜져 있고 토큰이 있으면 저장된 nudge 캘린더를 검증/복구한다.
+    // 실패해도 재렌더만 하고 재시도하지 않는다(무한 루프 방지) — 토큰 만료 시 '다시 로그인' 버튼 노출
     const st = store.get().settings;
-    if (st.gcalEnabled && gcal.hasToken() && !st.gcalNudgeId) finishConnect(st).catch(() => {});
-    else if (!connectChecked && st.gcalEnabled && gcal.hasToken()) {
-      // 재시작 직후 1회: 저장된 nudge 캘린더가 사용자가 삭제/삭제 보류한 상태인지 검증해 자동 복구
+    if (!connectChecked && st.gcalEnabled && gcal.hasToken()) {
       connectChecked = true;
-      ensureNudgeCalendar(st)
-        .then(() => render())
-        .catch(() => render()); // 토큰 만료 시 api()가 clearToken → 재로그인 버튼 노출됨
+      const work = st.gcalNudgeId ? ensureNudgeCalendar(st) : finishConnect(st);
+      work.then(() => render()).catch(() => render());
     }
   }
   VIEWS[currentView]();
