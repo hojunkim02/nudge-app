@@ -1052,7 +1052,9 @@ async function syncNudge(calId) {
     keep.add(nid);
     jobs.push(gcal.upsertEvent(calId, map[nid], body).then((ev) => { map[nid] = ev.id; }));
   }
-  await Promise.all(jobs);
+  // 동시 전송을 3개로 제한 — 병렬 폭주로 구글 사용자별 쿼리 한도(403 rate limit) 초과 방지
+  const LIMIT = 3;
+  for (let i = 0; i < jobs.length; i += LIMIT) await Promise.all(jobs.slice(i, i + LIMIT));
   for (const [nid, eid] of Object.entries({ ...map })) {
     if (!keep.has(nid) && await gcal.deleteEvent(calId, eid)) delete map[nid];
   }
