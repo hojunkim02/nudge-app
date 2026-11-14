@@ -121,6 +121,15 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
+export async function calendarExists(calendarId) {
+  try {
+    await api(`/calendars/${encodeURIComponent(calendarId)}`);
+    return true;
+  } catch (e) {
+    if (/Google API 오류 4\d\d/.test(e.message)) return false;
+    throw e;
+  }
+}
 export async function findCalendarByName(name) {
   const r = await api("/users/me/calendarList?minAccessRole=writer");
   return (r.items || []).find((c) => (c.summaryOverride || c.summary) === name) || null;
