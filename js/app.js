@@ -468,8 +468,7 @@ function viewStudy() {
       <div class="subject-nav" id="subject-nav">
         ${s.subjects.map((sub) => `<button class="chip" data-goto-subject="${sub.id}">${esc(sub.name)}</button>`).join("")}
       </div>
-      <button class="btn compact" id="btn-new-lecture" style="background:var(--accent);color:var(--on-fill);flex:none">새 강의</button>
-      <button class="btn icon-btn" id="btn-add-subject" aria-label="과목 추가" style="min-width:36px;min-height:36px;flex:none">${adding.level === "subject" ? "취소" : PLUS_SVG}</button>
+      <button class="btn" id="btn-add-subject" style="min-height:36px;padding:0 12px;font-size:13px;background:var(--accent);color:var(--on-fill);flex:none">${adding.level === "subject" ? "취소" : "새 과목"}</button>
     </div>
     ${adding.level === "subject" ? `<div class="card">${ADD_ROW("qa-subject")}</div>` : ""}
     ${s.subjects.map((sub) => `<div class="card subject-card" id="sub-${sub.id}">${subjectHtml(sub)}</div>`).join("") || (adding.level === "subject" ? "" : `<p class="muted">아직 과목이 없습니다. + 버튼으로 추가하세요.</p>`)}
@@ -561,37 +560,6 @@ function viewStudy() {
     confirm?.addEventListener("click", onAdd);
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") onAdd(); });
   };
-
-  $("#btn-new-lecture").addEventListener("click", () => {
-    if (!s.subjects.length) { toast("먼저 과목을 추가해 주세요"); return; }
-    const subOpts = s.subjects.map((sub) => `<option value="${sub.id}">${esc(sub.name)}</option>`).join("");
-    openSheet(`
-      <h2>새 강의</h2>
-      <div class="field"><label>과목</label><select id="nl-subject">${subOpts}</select></div>
-      <div class="field"><label>챕터</label><select id="nl-chapter"></select></div>
-      <div class="field"><label>강의 이름</label><input type="text" id="nl-name" placeholder="예: 1강"></div>
-      <button class="btn primary block" id="btn-nl-save">추가</button>
-    `, (sheet, close) => {
-      const subSel = $("#nl-subject", sheet);
-      const chSel = $("#nl-chapter", sheet);
-      const fill = () => {
-        const sub = s.subjects.find((x) => x.id === subSel.value);
-        chSel.innerHTML = sub?.chapters.length
-          ? sub.chapters.map((ch) => `<option value="${ch.id}">${esc(ch.name)}</option>`).join("")
-          : `<option value="">(챕터 없음 — 먼저 챕터를 추가해 주세요)</option>`;
-      };
-      subSel.addEventListener("change", fill);
-      fill();
-      $("#btn-nl-save", sheet).addEventListener("click", () => {
-        const name = $("#nl-name", sheet).value.trim();
-        if (!name) return;
-        if (!chSel.value) { toast("먼저 챕터를 추가해 주세요"); return; }
-        store.addLecture(chSel.value, name);
-        close();
-        toast("강의를 추가했습니다");
-      });
-    });
-  });
 
   $("#btn-add-subject").addEventListener("click", () => {
     if (adding.level === "subject") { adding.level = null; render(); return; }
