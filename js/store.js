@@ -57,7 +57,8 @@ function defaultState() {
       notify: false,
       successMin: 80,
       gcalEnabled: false,
-      gcalNudgeId: ""
+      gcalNudgeId: "",
+      gcalMode: "daily"
     },
     logs: []
   };
