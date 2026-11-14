@@ -978,10 +978,9 @@ async function finishConnect(st) {
   connectBusy = true;
   try {
     toast("nudge 캘린더를 준비하는 중…", 1500);
-    const calId = await ensureNudgeCalendar(st);
+    await ensureNudgeCalendar(st);
     render(); // 캘린더가 생기는 즉시 '이동' 버튼 활성화
-    const n = await syncNudge(calId);
-    toast(`구글 캘린더에 ${n}개 항목을 채웠습니다`);
+    toast("구글 캘린더에 연결되었습니다"); // 연결 확인만 — 일정 업로드는 아직 안 함
   } finally {
     connectBusy = false;
   }
