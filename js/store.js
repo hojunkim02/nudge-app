@@ -1,4 +1,3 @@
-// Nudge store — localStorage persistence + schedule engine
 const KEY = "nudge.data.v1";
 const SCHEMA = 1;
 
@@ -38,11 +37,11 @@ function defaultState() {
     created: Date.now(),
     schedule: DEFAULT_SCHEDULE.map((c) => ({ ...c })),
     goalBase: 10,
-    checks: {},            // { "YYYY-MM-DD": { [checkId]: true } }
-    lunch: {},             // { "YYYY-MM-DD": "yes" | "no" }
-    sessions: [],          // study sessions { id, date, label, start, end, measuredMin, finalMin }
-    timer: null,           // { label, start }
-    subjects: [],          // { id, name, chapters: [{ id, name, lectures: [{ id, name, status }] }] }
+    checks: {},
+    lunch: {},
+    sessions: [],
+    timer: null,
+    subjects: [],
     goal: { daily: 10, adjustedToday: null, adjustLog: [] },
     workout: {
       assign: { 1: "등", 2: "가슴", 3: "어깨", 4: "팔", 5: "하체", 0: "휴식", 6: "휴식" },
@@ -50,7 +49,7 @@ function defaultState() {
       progress: { date: null, done: 0 },
       history: []
     },
-    gcalMap: {},         // { "sched:<id>": googleEventId, "sess:<id>": googleEventId }
+    gcalMap: {},
     settings: {
       bw: false,
       theme: "system",
@@ -64,7 +63,6 @@ function defaultState() {
 }
 
 
-/* ── demo seed: 한 달간 사용한 것 같은 예시 데이터 (demo 브랜치 전용) ── */
 function demoState() {
   const st = defaultState();
   const today = new Date();
@@ -73,7 +71,6 @@ function demoState() {
   let uid = 0;
   const id = () => `demo-${++uid}`;
 
-  // 과목/챕터/강의 (약 60% 완료)
   const mkSub = (name, chapters) => ({
     id: id(), name,
     chapters: chapters.map(([cn, n, doneUpTo]) => ({
@@ -87,7 +84,6 @@ function demoState() {
     mkSub("경제학", [["ch01 미시경제", 16, 16], ["ch02 거시경제", 14, 9], ["ch03 국제경제", 8, 1]])
   ];
 
-  // 최근 35일 자습 세션 + 체크 + 점심 + 운동 기록
   for (let n = 35; n >= 1; n--) {
     const d = day(n);
     const key = dk(d);
@@ -108,7 +104,6 @@ function demoState() {
       st.workout.history.push({ date: key, part, done: true, rest: part === "휴식" });
     }
   }
-  // 오늘: 일부 진행 중인 상태
   const tKey = dk(today);
   if ([1, 2, 3, 4, 5].includes(today.getDay())) {
     st.checks[tKey] = {};
@@ -157,7 +152,6 @@ export function save() {
 
 export function get() { return state; }
 
-/* ── dates ─────────────────────────────── */
 export function dateKey(d = new Date()) {
   const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
@@ -165,7 +159,7 @@ export function dateKey(d = new Date()) {
 export function startOfWeek(d = new Date()) {
   const x = new Date(d);
   const day = x.getDay();
-  x.setDate(x.getDate() - ((day + 6) % 7)); // Monday
+  x.setDate(x.getDate() - ((day + 6) % 7));
   x.setHours(0, 0, 0, 0);
   return x;
 }
@@ -173,7 +167,6 @@ export function fmtDate(d) {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAYS[d.getDay()]})`;
 }
 
-/* ── daily checklist ───────────────────── */
 export function checksForDate(d = new Date()) {
   const dow = d.getDay();
   return state.schedule.filter((c) => c.days.includes(dow));
@@ -220,7 +213,6 @@ export function resetDay(key) {
   save();
 }
 
-/* ── lunch decision (max 3 "yes" per Mon–Fri week) ── */
 export function autoResolveLunch() {
   const now = new Date();
   const dow = now.getDay();
@@ -249,7 +241,6 @@ export function lunchAvailable() {
   return lunchThisWeek() < 3;
 }
 
-/* ── timer / sessions (Idle→Running→Paused→Pending→Finalized) ── */
 export function startTimer(label, kind = "regular") {
   if (state.timer) return false;
   state.timer = { label, kind, start: Date.now(), pausedAt: null, pauseAccum: 0 };
@@ -330,7 +321,6 @@ export function minutesOnSplit(key) {
   return { reg, extra };
 }
 
-/* ── lectures ───────────────────────────── */
 export function addSubject(name) {
   const sub = { id: crypto.randomUUID(), name, chapters: [] };
   state.subjects.push(sub);
@@ -427,7 +417,6 @@ export function setDailyGoal(n, reason = "") {
   save();
 }
 
-/* ── workout cycle ─────────────────────── */
 export function todayWorkout(d = new Date()) {
   return state.workout.assign[d.getDay()] || "휴식";
 }
@@ -497,4 +486,3 @@ export function undoWorkoutToday() {
   save();
   return true;
 }
-/* ── backup / restore ──────────────────── */

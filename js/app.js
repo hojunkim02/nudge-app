@@ -1,4 +1,3 @@
-// Nudge — app shell: router, views, sheets, toasts
 import * as store from "./store.js";
 import * as gcal from "./gcal.js";
 
@@ -11,7 +10,6 @@ const titleEl = $("#view-title");
 const subEl = $("#view-subtitle");
 let currentView = "today";
 
-/* ── toast ─────────────────────────────── */
 export function toast(msg, ms = 2600) {
   const t = document.createElement("div");
   t.className = "toast";
@@ -25,7 +23,6 @@ export function toast(msg, ms = 2600) {
   }, ms);
 }
 
-/* ── sheet (stacked: backdrop tap pops one level) ── */
 const sheetStack = [];
 export function openSheet(html, onMount) {
   const root = $("#sheet-root");
@@ -51,7 +48,6 @@ export function openSheet(html, onMount) {
   return wrappedClose;
 }
 
-/* ── helpers ───────────────────────────── */
 const CHECK_SVG = `<svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const UNDO_SVG = `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h9a7 7 0 1 1 0 14h-3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`;
 const PLUS_SVG = `<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`;
@@ -115,7 +111,6 @@ const nowHM = () => {
   return `${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-/* ── screen wake lock (타이머 실행 중 화면 꺼짐 방지) ── */
 let wakeLock = null;
 async function keepAwake() {
   try { wakeLock = await navigator.wakeLock?.request("screen"); } catch { wakeLock = null; }
@@ -132,7 +127,6 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("pageshow", (e) => { if (e.persisted) render(); });
 
-/* ═════════ VIEW: TODAY ═════════ */
 let selDay = null;
 
 function viewToday() {
@@ -395,7 +389,6 @@ function startTimerTick() {
   }, 500);
 }
 
-/* ── theme ─────────────────────────────── */
 function applyTheme() {
   const { bw, theme } = store.get().settings;
   const root = document.documentElement;
@@ -407,7 +400,6 @@ function applyTheme() {
   metas.forEach((m) => m.setAttribute("content", dark ? "#1C1C1E" : "#F2F2F7"));
 }
 
-/* ── schedule notifications (foreground) ── */
 let notifyTimers = [];
 function scheduleNotifications() {
   notifyTimers.forEach(clearTimeout);
@@ -429,7 +421,6 @@ function scheduleNotifications() {
   }
 }
 
-/* ═════════ VIEW: STUDY ═════════ */
 const adding = { level: null, id: null };
 const editing = { level: null, id: null };
 const ADD_ROW = (id) => `
@@ -664,7 +655,6 @@ function viewStudy() {
   });
 }
 
-/* ═════════ VIEW: WORKOUT ═════════ */
 function viewWorkout() {
   const s = store.get();
   const todayKey = store.dateKey();
@@ -882,7 +872,6 @@ function viewStats() {
   $("#seg-month").addEventListener("click", () => { statsRange = "month"; render(); });
 }
 
-/* ═════════ VIEW: SETTINGS ═════════ */
 function dayToggles(days) {
   return `<div style="display:flex;gap:6px;flex-wrap:wrap;padding:4px 0">
     ${store.WEEKDAYS.map((w, i) => `<button type="button" class="btn" data-toggle-day="${i}" style="min-height:38px;padding:0 13px;font-size:13px;${days.includes(i) ? "background:var(--accent);color:var(--on-fill)" : ""}">${w}</button>`).join("")}
@@ -1317,7 +1306,6 @@ function viewSettings() {
 
 }
 
-/* ── router ─────────────────────────────── */
 const VIEWS = { today: viewToday, study: viewStudy, workout: viewWorkout, stats: viewStats, settings: viewSettings };
 
 const TAB_ORDER = ["today", "study", "workout", "stats", "settings"];
@@ -1325,7 +1313,6 @@ let prevTab = "today";
 
 export function render(scrollTop = false) {
   clearInterval(tickTimer);
-  // 로그인 직후 캘린더 준비가 끊긴 상태면 어느 화면에서든 자동 복구
   {
     const st = store.get().settings;
     if (!connectChecked && st.gcalEnabled && gcal.hasToken()) {

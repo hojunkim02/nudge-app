@@ -1,8 +1,4 @@
-/* Nudge — Google Calendar 동기화 (Google Identity Services OAuth + Calendar API v3)
-   정적 PWA에서 안전하게 쓰는 방식: 클라이언트 시크릿 없이 OAuth 토큰만 사용. */
 
-/* 배포자가 한 번만 채워 넣으면 사용자는 구글 로그인만으로 연결됩니다.
-   (비워 두면 설정 화면의 클라이언트 ID 입력란이 표시됩니다) */
 export const BUILTIN_CLIENT_ID = "938328198458-nbal2ejhmff2ec8j5fu2uo6spbc498o7.apps.googleusercontent.com";
 
 const TOKEN_KEY = "nudge.gcal.token";
@@ -50,7 +46,6 @@ function loadGsi() {
     document.head.appendChild(s);
   });
 }
-/* 팝업은 사용자 탭 제스처 안에서 열려야 하므로, 설정 화면 진입 시 미리 스크립트를 로드해 둔다 */
 export function preload() {
   loadGsi().catch(() => {});
 }
@@ -124,7 +119,7 @@ async function api(path, opts = {}) {
 export async function calendarExists(calendarId) {
   try {
     const cal = await api(`/calendars/${encodeURIComponent(calendarId)}`);
-    return !cal.deleted; // 삭제 보류(trash) 상태면 없는 것으로 취급
+    return !cal.deleted;
   } catch (e) {
     if (/Google API 오류 4\d\d/.test(e.message)) return false;
     throw e;
@@ -169,7 +164,6 @@ export async function deleteEvent(calendarId, eventId) {
   }
 }
 
-/* ── 이벤트 본문 생성 (순수 함수) ── */
 const GCAL_DOW = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
 
 export function buildScheduleEvent(it, now = new Date()) {
