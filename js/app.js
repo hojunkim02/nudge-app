@@ -966,38 +966,6 @@ function openScheduleEdit() {
   });
 }
 
-let gcalCals = [];
-async function syncGoogle() {
-  const s = store.get();
-  const calId = s.settings.gcalCalendarId;
-  if (!calId) throw new Error("캘린더를 선택해 주세요");
-  const map = s.gcalMap;
-  const keep = new Set();
-  let pushed = 0;
-  for (const it of s.schedule) {
-    const nid = "sched:" + it.id;
-    const body = gcal.buildScheduleEvent(it);
-    if (!body) continue;
-    keep.add(nid);
-    const ev = await gcal.upsertEvent(calId, map[nid], body);
-    map[nid] = ev.id; pushed++;
-  }
-  for (const sess of s.sessions) {
-    const nid = "sess:" + sess.id;
-    const body = gcal.buildSessionEvent(sess);
-    if (!body) continue;
-    keep.add(nid);
-    const ev = await gcal.upsertEvent(calId, map[nid], body);
-    map[nid] = ev.id; pushed++;
-  }
-  for (const [nid, eid] of Object.entries({ ...map })) {
-    if (!keep.has(nid) && await gcal.deleteEvent(calId, eid)) delete map[nid];
-  }
-  s.settings.gcalSyncedAt = Date.now();
-  store.save();
-  return pushed;
-}
-
 function viewSettings() {
   const s = store.get();
   const st = s.settings;
@@ -1069,22 +1037,13 @@ function viewSettings() {
     </div>
     <div class="card">
       <p class="card-title">구글 캘린더 동기화</p>
-      ${gcal.BUILTIN_CLIENT_ID
-        ? `<p class="muted">이 앱에는 연결 정보가 내장되어 있습니다. 연결 버튼만 누르면 됩니다.</p>`
-        : `<div class="field"><label>OAuth 클라이언트 ID</label><input type="text" id="gc-id" value="${esc(st.gcalClientId)}" placeholder="Google Cloud Console에서 발급" autocomplete="off"></div>`}
-      <div class="field"><label>캘린더</label>
-        <select id="gc-cal" style="width:100%;min-height:42px">
-          <option value="">연결 후 선택</option>
-          ${gcalCals.map((c) => `<option value="${esc(c.id)}" ${st.gcalCalendarId === c.id ? "selected" : ""}>${esc(c.title)}</option>`).join("")}
-        </select>
+      <div class="row">
+        <div class="row-main"><div class="row-title">동기화</div></div>
+        <button class="switch ${st.gcalEnabled ? "on" : ""}" id="sw-gcal" role="switch" aria-checked="${st.gcalEnabled}"></button>
       </div>
-      <div style="display:flex;gap:10px;padding:8px 0 6px">
-        <button class="btn" id="btn-gc-connect">연결</button>
-        <button class="btn" id="btn-gc-add">일정 추가</button>
-        <button class="btn primary" id="btn-gc-sync">지금 동기화</button>
-      </div>
-      ${st.gcalSyncedAt ? `<p class="muted">마지막 동기화: ${new Date(st.gcalSyncedAt).toLocaleString("ko-KR")}</p>` : `<p class="muted">일정 항목은 주간 반복 일정으로, 자습 세션은 종일 일정으로 업데이트됩니다.</p>`}
-      <p class="muted">클라이언트 ID 발급: Google Cloud Console에서 Calendar API를 사용 설정한 뒤, OAuth 클라이언트 ID(웹 애플리케이션)를 만들고 승인된 JavaScript 원본에 이 사이트의 주소(예: https://hojunkim02.github.io)를 추가하세요.</p>
+      ${st.gcalEnabled ? `
+      <button class="btn primary block" id="btn-gcal-login">Google 로그인</button>
+      <p class="muted">${gcal.hasToken() ? "연결됨 · Calendar API 사용 준비 완료" : "Google 계정으로 로그인하면 Calendar API에 연결됩니다."}</p>` : ""}
     </div>
   `;
 
@@ -1124,64 +1083,19 @@ function viewSettings() {
 
   $("#btn-sched").addEventListener("click", openScheduleEdit);
 
-  $("#gc-id")?.addEventListener("change", () => { st.gcalClientId = $("#gc-id").value.trim(); store.save(); });
-  $("#gc-cal")?.addEventListener("change", () => { st.gcalCalendarId = $("#gc-cal").value; store.save(); });
-  $("#btn-gc-connect")?.addEventListener("click", async () => {
-    const cid = $("#gc-id")?.value.trim() || st.gcalClientId || gcal.BUILTIN_CLIENT_ID;
-    if (!cid) { toast("OAuth 클라이언트 ID를 입력해 주세요"); return; }
-    if ($("#gc-id")) { st.gcalClientId = cid; store.save(); }
+  $("#sw-gcal")?.addEventListener("click", () => {
+    st.gcalEnabled = !st.gcalEnabled;
+    store.save();
+    render();
+  });
+  $("#btn-gcal-login")?.addEventListener("click", async () => {
+    const cid = gcal.BUILTIN_CLIENT_ID || st.gcalClientId;
+    if (!cid) { toast("클라이언트 ID가 설정되지 않았습니다"); return; }
     try {
       await gcal.login(cid);
-      gcalCals = await gcal.listCalendars();
-      if (!st.gcalCalendarId && gcalCals[0]) st.gcalCalendarId = gcalCals[0].id;
-      store.save();
       render();
-      toast("Google 계정에 연결했습니다");
+      toast("Google 계정에 연결되었습니다");
     } catch (e) { toast(e.message, 5000); }
-  });
-  $("#btn-gc-add")?.addEventListener("click", () => {
-    openSheet(`
-      <h2>구글 캘린더에 일정 추가</h2>
-      <div class="field"><label>제목</label><input type="text" id="ce-title" placeholder="예: 모의고사"></div>
-      <div class="field"><label>날짜</label><input type="date" id="ce-date"></div>
-      <div class="field"><label>시간 (선택)</label><input type="text" id="ce-time" placeholder="예: 19:00–20:30 · 비우면 종일"></div>
-      <div class="field"><label>메모 (선택)</label><input type="text" id="ce-memo"></div>
-      <button class="btn primary block" id="ce-save">캘린더에 추가</button>
-    `, (sheet, close) => {
-      $("#ce-date", sheet).value = store.dateKey();
-      $("#ce-save", sheet).addEventListener("click", async () => {
-        const clientId = $("#gc-id")?.value.trim() || st.gcalClientId || gcal.BUILTIN_CLIENT_ID;
-        if (!clientId) { toast("먼저 OAuth 클라이언트 ID를 입력해 주세요"); return; }
-        if (!st.gcalCalendarId) { toast("캘린더를 선택해 주세요"); return; }
-        const body = gcal.buildCustomEvent({
-          title: $("#ce-title", sheet).value.trim(),
-          date: $("#ce-date", sheet).value,
-          time: $("#ce-time", sheet).value.trim(),
-          memo: $("#ce-memo", sheet).value.trim(),
-        });
-        if (!body) { toast("제목과 날짜를 입력해 주세요"); return; }
-        toast("추가 중…", 1500);
-        try {
-          if (!gcal.hasToken()) await gcal.login(clientId);
-          await gcal.createEvent(st.gcalCalendarId, body);
-          close();
-          toast("구글 캘린더에 일정을 추가했습니다");
-        } catch (e) { toast(e.message, 6000); }
-      });
-    });
-  });
-
-  $("#btn-gc-sync")?.addEventListener("click", async () => {
-    const cid = $("#gc-id")?.value.trim() || st.gcalClientId || gcal.BUILTIN_CLIENT_ID;
-    if (!cid) { toast("OAuth 클라이언트 ID를 입력해 주세요"); return; }
-    if (!st.gcalCalendarId) { toast("캘린더를 선택해 주세요"); return; }
-    toast("동기화 중…", 1500);
-    try {
-      if (!gcal.hasToken()) await gcal.login(cid);
-      const n = await syncGoogle();
-      render();
-      toast(`구글 캘린더에 ${n}개 항목을 업데이트했습니다`);
-    } catch (e) { toast(e.message, 6000); render(); }
   });
 
   $("#btn-goal").addEventListener("click", () => {
