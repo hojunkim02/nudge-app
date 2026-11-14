@@ -1,65 +1,27 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Nudge — 개인정보처리방침</title>
-<style>
-  :root { color-scheme: light dark; }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; padding: 40px 20px 60px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    line-height: 1.75; color: #1C1C1E; background: #F2F2F7;
-  }
-  @media (prefers-color-scheme: dark) {
-    body { color: #F2F2F7; background: #1C1C1E; }
-    .card { background: #2C2C2E !important; }
-  }
-  main { max-width: 680px; margin: 0 auto; }
-  .logo { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
-  .logo img { width: 44px; height: 44px; border-radius: 10px; }
-  .logo h1 { font-size: 22px; margin: 0; }
-  .card {
-    background: #FFFFFF; border-radius: 18px; padding: 28px 26px;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
-  }
-  h2 { font-size: 17px; margin: 28px 0 8px; }
-  h2:first-of-type { margin-top: 0; }
-  p, li { font-size: 15px; color: inherit; }
-  ul { padding-left: 20px; }
-  .muted { color: #8E8E93; font-size: 13px; margin-top: 28px; }
-  a { color: #F76729; }
-</style>
-</head>
-<body>
-<main>
-  <div class="logo">
-    <img src="icons/apple-touch-icon.png" alt="Nudge">
-    <h1>Nudge — 개인정보처리방침</h1>
-  </div>
-  <div class="card">
-    <h2>1. 수집하는 개인정보</h2>
-    <p>Nudge는 별도의 서버를 운영하지 않으며, 사용자의 학습·운동 기록(일정, 자습 시간, 과목·강의 진도, 통계)과 설정은 모두 사용자 기기의 브라우저 저장소(localStorage)에만 저장합니다. 이 데이터는 기기를 벗어나 외부로 전송되지 않습니다.</p>
-
-    <h2>2. Google 계정 및 캘린더 연동</h2>
-    <p>사용자가 직접 켠 경우에만, Nudge는 Google 계정으로 로그인하여 다음 권한을 사용합니다.</p>
-    <ul>
-      <li>Google Calendar 읽기/쓰기 — 사용자의 Google 캘린더에 "Nudge" 캘린더를 만들고 학습·운동 기록을 반영</li>
-      <li>Google Calendar 일정 읽기/쓰기 — 위 캘린더에 일정을 추가·갱신</li>
-    </ul>
-    <p>로그인 시 발급되는 액세스 토큰은 기기의 브라우저 저장소에만 저장되며, Nudge는 이를 Google Calendar API 호출 외의 목적으로 사용하지 않습니다. Nudge는 사용자의 비밀번호를 수집하거나 저장하지 않습니다.</p>
-
-    <h2>3. 개인정보의 제3자 제공</h2>
-    <p>앞 항목의 Google Calendar 연동 외에, Nudge는 어떠한 개인정보도 제3자에게 제공하지 않습니다. 분석 도구, 광고, 추적 기능도 포함하고 있지 않습니다.</p>
-
-    <h2>4. 개인정보의 보관 및 삭제</h2>
-    <p>모든 데이터는 기기에만 보관됩니다. 삭제를 원하는 경우 브라우저의 사이트 데이터 삭제(또는 앱 재설치)를 하면 즉시 완전히 삭제됩니다. Google 캘린더에 반영된 기록은 Google 캘린더에서 직접 삭제할 수 있습니다.</p>
-
-    <h2>5. 문의</h2>
-    <p>개인정보 관련 문의는 GitHub 저장소(<a href="https://github.com/hojunkim02/nudge-app">hojunkim02/nudge-app</a>)의 이슈를 통해 남겨 주세요.</p>
-  </div>
-  <p class="muted">시행일: 2026년 11월 14일 · <a href="terms.html">서비스 이용약관 보기</a></p>
-</main>
-</body>
-</html>
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Nudge — 개인정보처리방침</title><style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+margin: 0; padding: 40px 20px 60px;
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+line-height: 1.75; color: #1C1C1E; background: #F2F2F7;
+}
+@media (prefers-color-scheme: dark) {
+body { color: #F2F2F7; background: #1C1C1E; }
+.card { background: #2C2C2E !important; }
+}
+main { max-width: 680px; margin: 0 auto; }
+.logo { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+.logo img { width: 44px; height: 44px; border-radius: 10px; }
+.logo h1 { font-size: 22px; margin: 0; }
+.card {
+background: #FFFFFF; border-radius: 18px; padding: 28px 26px;
+box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+h2 { font-size: 17px; margin: 28px 0 8px; }
+h2:first-of-type { margin-top: 0; }
+p, li { font-size: 15px; color: inherit; }
+ul { padding-left: 20px; }
+.muted { color: #8E8E93; font-size: 13px; margin-top: 28px; }
+a { color: #F76729; }
+</style></head><body><main><div class="logo"><img src="icons/apple-touch-icon.png" alt="Nudge"><h1>Nudge — 개인정보처리방침</h1></div><div class="card"><h2>1. 수집하는 개인정보</h2><p>Nudge는 별도의 서버를 운영하지 않으며, 사용자의 학습·운동 기록(일정, 자습 시간, 과목·강의 진도, 통계)과 설정은 모두 사용자 기기의 브라우저 저장소(localStorage)에만 저장합니다. 이 데이터는 기기를 벗어나 외부로 전송되지 않습니다.</p><h2>2. Google 계정 및 캘린더 연동</h2><p>사용자가 직접 켠 경우에만, Nudge는 Google 계정으로 로그인하여 다음 권한을 사용합니다.</p><ul><li>Google Calendar 읽기/쓰기 — 사용자의 Google 캘린더에 "Nudge" 캘린더를 만들고 학습·운동 기록을 반영</li><li>Google Calendar 일정 읽기/쓰기 — 위 캘린더에 일정을 추가·갱신</li></ul><p>로그인 시 발급되는 액세스 토큰은 기기의 브라우저 저장소에만 저장되며, Nudge는 이를 Google Calendar API 호출 외의 목적으로 사용하지 않습니다. Nudge는 사용자의 비밀번호를 수집하거나 저장하지 않습니다.</p><h2>3. 개인정보의 제3자 제공</h2><p>앞 항목의 Google Calendar 연동 외에, Nudge는 어떠한 개인정보도 제3자에게 제공하지 않습니다. 분석 도구, 광고, 추적 기능도 포함하고 있지 않습니다.</p><h2>4. 개인정보의 보관 및 삭제</h2><p>모든 데이터는 기기에만 보관됩니다. 삭제를 원하는 경우 브라우저의 사이트 데이터 삭제(또는 앱 재설치)를 하면 즉시 완전히 삭제됩니다. Google 캘린더에 반영된 기록은 Google 캘린더에서 직접 삭제할 수 있습니다.</p><h2>5. 문의</h2><p>개인정보 관련 문의는 GitHub 저장소(<a href="https://github.com/hojunkim02/nudge-app">hojunkim02/nudge-app</a>)의 이슈를 통해 남겨 주세요.</p></div><p class="muted">시행일: 2026년 11월 14일 · <a href="terms.html">서비스 이용약관 보기</a></p></main></body></html>
