@@ -971,13 +971,19 @@ function openScheduleEdit() {
   });
 }
 
-let nudgeRecovering = false;
+let connectBusy = false;
 async function finishConnect(st) {
-  toast("nudge 캘린더를 준비하는 중…", 1500);
-  const calId = await ensureNudgeCalendar(st);
-  render(); // 캘린더가 생기는 즉시 '이동' 버튼 활성화
-  const n = await syncNudge(calId);
-  toast(`구글 캘린더에 ${n}개 항목을 채웠습니다`);
+  if (connectBusy) return; // 로그인 직후 render()의 자동 복구와 동시에 실행되는 것 방지
+  connectBusy = true;
+  try {
+    toast("nudge 캘린더를 준비하는 중…", 1500);
+    const calId = await ensureNudgeCalendar(st);
+    render(); // 캘린더가 생기는 즉시 '이동' 버튼 활성화
+    const n = await syncNudge(calId);
+    toast(`구글 캘린더에 ${n}개 항목을 채웠습니다`);
+  } finally {
+    connectBusy = false;
+  }
 }
 async function connectGoogle(st) {
   const cid = gcal.BUILTIN_CLIENT_ID || st.gcalClientId;
@@ -1335,10 +1341,7 @@ export function render(scrollTop = false) {
   // 로그인 직후 캘린더 준비가 끊긴 상태면 어느 화면에서든 자동 복구
   {
     const st = store.get().settings;
-    if (st.gcalEnabled && gcal.hasToken() && !st.gcalNudgeId && !nudgeRecovering) {
-      nudgeRecovering = true;
-      finishConnect(st).catch(() => {}).finally(() => { nudgeRecovering = false; });
-    }
+    if (st.gcalEnabled && gcal.hasToken() && !st.gcalNudgeId) finishConnect(st).catch(() => {});
   }
   VIEWS[currentView]();
   if (currentView !== prevTab) {
