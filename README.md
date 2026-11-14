@@ -31,6 +31,10 @@
 | **통계** | 주간/월간 자습 시간, 세션 수, 진도율, 성공 기준 판정 |
 | **설정** | 테마, 알림, 일정 편집, 학습/운동 설정, 구글 캘린더 동기화 |
 
+## 디자인
+
+UI/UX는 Microsoft의 디자인 시스템 [**Fluent 2**](https://fluent2.microsoft.design/)(특히 [iOS 컴포넌트](https://fluent2.microsoft.design/components/ios))를 참고했습니다. iOS 네이티브 앱처럼 자연스러운 시트 전환, 스프링 애니메이션, 라이트/다크 테마를 지향합니다.
+
 ## 시작하기
 
 1. iPhone Safari로 **[홈페이지](https://hojunkim02.github.io/nudge-app/)** 접속

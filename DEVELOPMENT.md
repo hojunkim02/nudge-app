@@ -4,6 +4,8 @@
 
 ## 기술 스택
 
+- 디자인 컨셉: [Fluent 2](https://fluent2.microsoft.design/)([iOS 컴포넌트](https://fluent2.microsoft.design/components/ios)) 참고
+
 - 의존성 없는 바닐라 JS(ES 모듈) + CSS, 빌드 단계 없음
 - `manifest.webmanifest` + 서비스 워커(`sw.js`) 캐싱(앱 셸 네트워크-우선)
 - iOS Safari 최신 버전 대상 (ES2020+ 문법, Pointer Events, `?.`/`??` 등 사용 가능)
