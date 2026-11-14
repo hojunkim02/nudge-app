@@ -1011,6 +1011,11 @@ async function connectGoogle(st) {
 
 async function ensureNudgeCalendar(st) {
   let calId = st.gcalNudgeId;
+  if (calId && !(await gcal.calendarExists(calId))) {
+    // 사용자가 구글에서 수동 삭제한 경우 → 새로 만든다
+    st.gcalNudgeId = "";
+    calId = "";
+  }
   if (!calId) {
     const found = await gcal.findCalendarByName("nudge");
     calId = found ? found.id : (await gcal.createCalendar("nudge")).id;
