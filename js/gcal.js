@@ -152,7 +152,7 @@ export function publicIcsUrl(calendarId) {
 export function buildDayEvent(key, title, timeText, nid) {
   const base = { summary: title, extendedProperties: { private: { nudgeId: nid } } };
   const m = String(timeText || "").match(/(\d{1,2}:\d{2})\s*[–\-~]\s*(\d{1,2}:\d{2})/);
-  if (m) return { ...base, start: { dateTime: `${key}T${m[1]}:00` }, end: { dateTime: `${key}T${m[2]}:00` } };
+  if (m) return { ...base, start: { dateTime: `${key}T${m[1]}:00`, timeZone: "Asia/Seoul" }, end: { dateTime: `${key}T${m[2]}:00`, timeZone: "Asia/Seoul" } };
   const d = new Date(key + "T00:00:00");
   d.setDate(d.getDate() + 1);
   const p = (n) => String(n).padStart(2, "0");

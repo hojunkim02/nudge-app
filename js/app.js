@@ -1392,8 +1392,8 @@ export function render(scrollTop = false) {
     b.addEventListener("click", async () => {
       b.disabled = true;
       try {
-        const n = await syncDayToGcal(yesterdayKey());
-        toast(n ? `구글 캘린더에 어제의 기록 ${n}건을 반영했습니다` : "반영할 어제의 기록이 없습니다");
+        const n = await syncDayToGcal(store.dateKey());
+        toast(n ? `구글 캘린더에 오늘의 기록 ${n}건을 반영했습니다` : "반영할 오늘의 기록이 없습니다");
       } catch (e) {
         toast(e.message || "구글 캘린더 반영 실패", 4000);
       } finally {
