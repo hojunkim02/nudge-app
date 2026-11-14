@@ -39,7 +39,7 @@ export async function login(clientId) {
     let settled = false;
     const tc = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
-      scope: "https://www.googleapis.com/auth/calendar.events",
+      scope: "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events",
       callback: (resp) => {
         if (settled) return;
         settled = true;
