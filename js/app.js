@@ -1120,7 +1120,7 @@ function viewSettings() {
       ${st.gcalEnabled && !gcal.hasToken() && !gcal.isLoggingIn() ? `<button class="btn primary block" id="btn-gc-relogin">다시 로그인</button>` : ""}
       <div class="row" style="margin-top:4px">
         <div class="row-main"><div class="row-title">Apple 캘린더 구독</div></div>
-        <button class="switch ${st.appleSub ? "on" : ""} ${st.gcalEnabled && st.gcalNudgeId ? "" : "dim"}" id="sw-applesub" role="switch" aria-checked="${!!st.appleSub}"></button>
+        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-gc-sub" ${st.gcalEnabled && st.gcalNudgeId ? "" : "disabled"}>이동</button>
       </div>
     </div>
   `;
@@ -1168,33 +1168,10 @@ function viewSettings() {
   });
   $("#btn-gc-relogin")?.addEventListener("click", () => connectGoogle(st));
 
-  $("#sw-applesub")?.addEventListener("click", () => {
-    if (!st.gcalEnabled || !st.gcalNudgeId) { toast("먼저 구글 캘린더 동기화를 켜주세요"); return; }
-    if (st.appleSub) { st.appleSub = false; store.save(); render(); return; }
-    st.appleSub = true;
-    store.save();
-    render();
+  $("#btn-gc-sub")?.addEventListener("click", () => {
+    if (!st.gcalEnabled || !st.gcalNudgeId) return;
     const webcal = "webcal://" + gcal.publicIcsUrl(st.gcalNudgeId).replace(/^https?:\/\//, "");
     try { location.href = webcal; } catch {}
-    // 허용하면 기기가 캘린더 구독 화면으로 전환되어 이 페이지가 백그라운드로 감.
-    // 일정 시간 페이지가 계속 보이면 허용을 거부한 것으로 간주해 스위치를 되돌린다.
-    let settled = false;
-    const onVis = () => {
-      if (document.visibilityState === "hidden") { settled = true; cleanup(); }
-    };
-    const cleanup = () => { document.removeEventListener("visibilitychange", onVis); clearTimeout(timer); };
-    const timer = setTimeout(() => {
-      if (settled) return;
-      cleanup();
-      const cur = store.get().settings;
-      if (cur.appleSub) {
-        cur.appleSub = false;
-        store.save();
-        render();
-        toast("구독 확인이 취소된 것 같습니다. 다시 시도해 주세요");
-      }
-    }, 8000);
-    document.addEventListener("visibilitychange", onVis);
   });
 
   $("#btn-goal").addEventListener("click", () => {
