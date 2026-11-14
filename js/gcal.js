@@ -113,8 +113,8 @@ async function api(path, opts = {}) {
       clearToken();
       throw new Error("캘린더 권한이 부족합니다. 스위치를 다시 켜어 로그인을 다시 해주세요");
     }
-    if (/quota/i.test(status + " " + msg)) {
-      throw new Error("Google API 사용 한도를 초과했습니다. 잠시 후 다시 시도해 주세요");
+    if (/quota|RESOURCE_EXHAUSTED|[Rr]ate[Ll]imit/i.test(status + " " + msg)) {
+      throw new Error("구글 사용량 한도를 초과했습니다(잦은 재시도·과도한 동기화가 원인). 1~2분 기다렸다가 다시 시도해 주세요");
     }
     throw new Error(`Google API 오류 ${res.status}${msg ? ` — ${msg}` : ""}`);
   }
