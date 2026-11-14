@@ -1048,12 +1048,7 @@ async function syncDayToGcal(key) {
   for (const it of store.checksForDate(new Date(key + "T00:00:00"))) {
     if (!done[it.id]) continue;
     const nid = `day:${key}:${it.id}`;
-    jobs.push(gcal.upsertEvent(gcalNudgeId, map[nid], gcal.buildDayEvent(key, `${it.title} ${it.time}`, nid)).then((ev) => { map[nid] = ev.id; }));
-  }
-  const mins = store.minutesOn(key);
-  if (mins > 0) {
-    const nid = `day:${key}:study`;
-    jobs.push(gcal.upsertEvent(gcalNudgeId, map[nid], gcal.buildDayEvent(key, `자습 ${fmtMin(mins)}`, nid)).then((ev) => { map[nid] = ev.id; }));
+    jobs.push(gcal.upsertEvent(gcalNudgeId, map[nid], gcal.buildDayEvent(key, it.title, it.time, nid)).then((ev) => { map[nid] = ev.id; }));
   }
   const LIMIT = 3;
   for (let i = 0; i < jobs.length; i += LIMIT) await Promise.all(jobs.slice(i, i + LIMIT));
