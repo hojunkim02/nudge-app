@@ -468,7 +468,7 @@ function viewStudy() {
       <div class="subject-nav" id="subject-nav">
         ${s.subjects.map((sub) => `<button class="chip" data-goto-subject="${sub.id}">${esc(sub.name)}</button>`).join("")}
       </div>
-      <button class="btn" id="btn-add-subject" style="min-height:36px;padding:0 12px;font-size:13px;background:var(--accent);color:var(--on-fill);flex:none">${adding.level === "subject" ? "취소" : "새 과목"}</button>
+      <button class="btn" id="btn-add-subject" style="min-height:36px;padding:0 12px;font-size:13px;flex:none">${adding.level === "subject" ? "취소" : "새 과목"}</button>
     </div>
     ${adding.level === "subject" ? `<div class="card">${ADD_ROW("qa-subject")}</div>` : ""}
     ${s.subjects.map((sub) => `<div class="card subject-card" id="sub-${sub.id}">${subjectHtml(sub)}</div>`).join("") || (adding.level === "subject" ? "" : `<p class="muted">아직 과목이 없습니다. + 버튼으로 추가하세요.</p>`)}
