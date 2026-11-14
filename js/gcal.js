@@ -102,9 +102,21 @@ async function api(path, opts = {}) {
   if (res.status === 401) { accessToken = null; throw new Error("Google 로그인이 만료되었습니다. 다시 연결해 주세요"); }
   if (res.status === 204) return null;
   if (!res.ok) {
-    let detail = "";
-    try { const j = await res.json(); detail = j?.error?.message ? ` — ${j.error.message}` : ""; } catch {}
-    throw new Error(`Google API 오류 ${res.status}${detail}`);
+    let j = null;
+    try { j = await res.json(); } catch {}
+    const status = j?.error?.status || "";
+    const msg = j?.error?.message || "";
+    if (status === "SERVICE_DISABLED" || /has not been used|is disabled/i.test(msg)) {
+      throw new Error("이 프로젝트에서 Calendar API가 꺼져 있습니다. Google Cloud Console → API 및 서비스 → 라이브러리 → 'Google Calendar API' → 사용");
+    }
+    if (/insufficient authentication scopes|PERMISSION_DENIED/i.test(status + " " + msg)) {
+      clearToken();
+      throw new Error("캘린더 권한이 부족합니다. 스위치를 다시 켜어 로그인을 다시 해주세요");
+    }
+    if (/quota/i.test(status + " " + msg)) {
+      throw new Error("Google API 사용 한도를 초과했습니다. 잠시 후 다시 시도해 주세요");
+    }
+    throw new Error(`Google API 오류 ${res.status}${msg ? ` — ${msg}` : ""}`);
   }
   return res.json();
 }
