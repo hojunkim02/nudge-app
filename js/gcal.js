@@ -3,7 +3,7 @@
 
 /* 배포자가 한 번만 채워 넣으면 사용자는 구글 로그인만으로 연결됩니다.
    (비워 두면 설정 화면의 클라이언트 ID 입력란이 표시됩니다) */
-export const BUILTIN_CLIENT_ID = "";
+export const BUILTIN_CLIENT_ID = "938328198458-nbal2ejhmff2ec8j5fu2uo6spbc498o7.apps.googleusercontent.com";
 
 let accessToken = null;
 
