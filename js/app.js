@@ -97,16 +97,14 @@ function makeSwipeable(row, onDelete) {
     setOpen(dx < -50);
     startX = null;
   };
-  row.addEventListener("touchstart", (e) => { if (e.target.closest(".drag-handle")) return; begin(e.touches[0].clientX); }, { passive: true });
-  row.addEventListener("touchmove", (e) => move(e.touches[0].clientX), { passive: true });
-  row.addEventListener("touchend", finish);
-  row.addEventListener("mousedown", (e) => {
+  row.addEventListener("pointerdown", (e) => {
     if (e.target.closest(".drag-handle")) return;
     begin(e.clientX);
-    const mm = (ev) => move(ev.clientX);
-    const mu = () => { finish(); window.removeEventListener("mousemove", mm); window.removeEventListener("mouseup", mu); };
-    window.addEventListener("mousemove", mm);
-    window.addEventListener("mouseup", mu);
+    const move2 = (ev) => move(ev.clientX);
+    const up = () => { finish(); window.removeEventListener("pointermove", move2); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
+    window.addEventListener("pointermove", move2);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
   });
   row.addEventListener("click", () => { if (open) setOpen(false); }, true);
 }
@@ -129,7 +127,6 @@ function releaseAwake() {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     if (store.get().timer && !store.get().timer.pausedAt) keepAwake();
-    // 팝업 로그인에서 돌아온 직후 등, 항상 최신 상태로 다시 그린다
     render();
   }
 });
@@ -153,7 +150,7 @@ function viewToday() {
 
   const todayLunch = s.lunch[key];
   const lunchCheck = checks.find((c) => c.id === "lunch" || c.title.includes("점심"));
-  const lunchId = lunchCheck ? lunchCheck.id : "lunch";
+  const lunchId = lunchCheck?.id ?? "lunch";
   const lunchYes = store.lunchThisWeek();
   const lunchDecided = todayLunch !== undefined;
   if (lunchCheck) lunchCheck.hidden = !lunchDecided && todayLunch !== "yes";
@@ -195,7 +192,7 @@ function viewToday() {
         ${lunchDecided
           ? `<span class="chip ${todayLunch === "yes" ? "accent" : ""}">${todayLunch === "yes" ? "예" : "아니오"}</span>`
           : `<div style="display:flex;gap:8px">
-              <button class="btn" style="min-height:40px;padding:0 16px" id="lunch-no" ${store.lunchAvailable() ? "" : "disabled"}>아니오</button>
+              <button class="btn compact" id="lunch-no" ${store.lunchAvailable() ? "" : "disabled"}>아니오</button>
               <button class="btn primary" style="min-height:40px;padding:0 16px" id="lunch-yes" ${store.lunchAvailable() && nowHM() < "11:50" ? "" : "disabled"}>예</button>
             </div>`}
       </div>
@@ -328,7 +325,7 @@ function viewToday() {
   });
 
   const startBtn = $("#btn-start");
-  if (startBtn) startBtn.addEventListener("click", () => {
+  startBtn?.addEventListener("click", () => {
     const h = new Date().getHours();
     const label = h < 12 ? "오전 자습" : h < 15 ? "점심 자습" : h >= 18 ? "저녁 자습" : "자습";
     store.startTimer(label);
@@ -337,14 +334,14 @@ function viewToday() {
   });
 
   const extraBtn = $("#btn-start-extra");
-  if (extraBtn) extraBtn.addEventListener("click", () => {
+  extraBtn?.addEventListener("click", () => {
     store.startTimer("추가 자습", "extra");
     keepAwake();
     render();
   });
 
   const stopBtn = $("#btn-stop");
-  if (stopBtn) stopBtn.addEventListener("click", () => {
+  stopBtn?.addEventListener("click", () => {
     releaseAwake();
     const elapsed = Math.round(store.timerElapsedSec() / 60);
     const sess = store.stopTimer();
@@ -457,7 +454,7 @@ function viewStudy() {
         <div class="row-main">
           <div class="row-title">강의 ${todayGoal}강 ${waived ? '<span class="chip red" style="margin-left:6px">면제</span>' : ""}</div>
         </div>
-        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-adjust">조정</button>
+        <button class="btn compact" id="btn-adjust">조정</button>
       </div>
       <div style="padding:6px 0 14px">
         <div class="bar"><i style="width:${waived ? 0 : goalPct}%"></i></div>
@@ -527,7 +524,6 @@ function viewStudy() {
         </div>`).join("")}`;
   }
 
-  // swipe-to-delete
   $$("[data-swipe]", viewEl).forEach((row) => {
     const [kind, id] = row.dataset.swipe.split(":");
     makeSwipeable(row, () => {
@@ -539,13 +535,11 @@ function viewStudy() {
     });
   });
 
-  // subject navigation
   $$("[data-goto-subject]", viewEl).forEach((b) => b.addEventListener("click", () => {
     const el = $("#sub-" + b.dataset.gotoSubject, viewEl);
     el?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }));
 
-  // cycle status
   $$("[data-cycle]", viewEl).forEach((b) => b.addEventListener("click", (e) => {
     if (e.target.closest("[data-swipe]") && !e.target.closest("[data-cycle]")) return;
     const st = store.cycleLecture(b.dataset.cycle);
@@ -557,7 +551,6 @@ function viewStudy() {
     render();
   }));
 
-  // inline add (no sheet)
   const wireAddRow = (inputId, onAdd) => {
     const input = $("#" + inputId, viewEl);
     if (!input) return;
@@ -612,7 +605,6 @@ function viewStudy() {
     });
   }));
 
-  // inline rename (pencil → in-place input)
   const wireRename = (inputId, save) => {
     const input = $("#" + inputId, viewEl);
     if (!input) return;
@@ -647,7 +639,6 @@ function viewStudy() {
     wireRename("ren-lecture", (v) => store.renameLecture(editing.id, v));
   }));
 
-  // goal adjust
   $("#btn-adjust").addEventListener("click", () => {
     openSheet(`
       <h2>목표 조정</h2>
@@ -972,15 +963,15 @@ function openScheduleEdit() {
 }
 
 let connectBusy = false;
-let connectChecked = false; // 재시작 후 캘린더 검증 1회 실행 플래그
+let connectChecked = false;
 async function finishConnect(st) {
-  if (connectBusy) return; // 로그인 직후 render()의 자동 복구와 동시에 실행되는 것 방지
+  if (connectBusy) return;
   connectBusy = true;
   try {
     toast("Nudge 캘린더를 준비하는 중…", 1500);
     await ensureNudgeCalendar(st);
-    render(); // 캘린더가 생기는 즉시 '이동' 버튼 활성화
-    toast("구글 캘린더에 연결되었습니다"); // 연결 확인만 — 일정 업로드는 아직 안 함
+    render();
+    toast("구글 캘린더에 연결되었습니다");
   } finally {
     connectBusy = false;
   }
@@ -992,12 +983,10 @@ async function connectGoogle(st) {
   store.save();
   render();
   try {
-    // 스위치를 켤 때는 저장된 토큰에 기대지 않고 항상 새로 로그인한다 (단순·확실)
     await gcal.login(cid);
-    await finishConnect(st); // Nudge 캘린더 확인/생성 + 연결 확인 토스트
+    await finishConnect(st);
     return true;
   } catch (e) {
-    // 어떤 실패든(취소·권한 거부·API 오류) 스위치를 OFF로 되돌린다
     st.gcalEnabled = false;
     store.save();
     render();
@@ -1009,7 +998,6 @@ async function connectGoogle(st) {
 async function ensureNudgeCalendar(st) {
   let calId = st.gcalNudgeId;
   if (calId && !(await gcal.calendarExists(calId))) {
-    // 사용자가 구글에서 수동 삭제한 경우 → 새로 만든다
     st.gcalNudgeId = "";
     calId = "";
   }
@@ -1041,7 +1029,6 @@ async function syncNudge(calId) {
     keep.add(nid);
     jobs.push(gcal.upsertEvent(calId, map[nid], body).then((ev) => { map[nid] = ev.id; }));
   }
-  // 동시 전송을 3개로 제한 — 병렬 폭주로 구글 사용자별 쿼리 한도(403 rate limit) 초과 방지
   const LIMIT = 3;
   for (let i = 0; i < jobs.length; i += LIMIT) await Promise.all(jobs.slice(i, i + LIMIT));
   for (const [nid, eid] of Object.entries({ ...map })) {
@@ -1062,34 +1049,34 @@ function viewSettings() {
         <div class="row-main">
           <div class="row-title">일정 항목</div>
         </div>
-        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-sched">편집</button>
+        <button class="btn compact" id="btn-sched">편집</button>
       </div>
       <div class="row">
         <div class="row-main">
-          <div class="row-title">기본 학습 목표</div>
+          <div class="row-title">학습 목표</div>
         </div>
-        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-goal">편집</button>
+        <button class="btn compact" id="btn-goal">편집</button>
       </div>
       <div class="row">
         <div class="row-main">
-          <div class="row-title">자습 성공 기준</div>
+          <div class="row-title">성공 기준</div>
         </div>
-        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-succ">편집</button>
+        <button class="btn compact" id="btn-succ">편집</button>
       </div>
     </div>
     <div class="card">
       <p class="card-title">운동 설정</p>
       <div class="row">
         <div class="row-main">
-          <div class="row-title">요일별 분할</div>
+          <div class="row-title">요일 설정</div>
         </div>
-        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-wassign">편집</button>
+        <button class="btn compact" id="btn-wassign">편집</button>
       </div>
       <div class="row">
         <div class="row-main">
           <div class="row-title">매일 루틴</div>
         </div>
-        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-routine">편집</button>
+        <button class="btn compact" id="btn-routine">편집</button>
       </div>
     </div>
     <div class="card">
@@ -1123,13 +1110,13 @@ function viewSettings() {
     <div class="card">
       <p class="card-title">동기화</p>
       <div class="row">
-        <div class="row-main"><div class="row-title">Google 캘린더 생성</div></div>
+        <div class="row-main"><div class="row-title">캘린더 생성</div></div>
         <button class="switch ${st.gcalEnabled ? "on" : ""}" id="sw-gcal" role="switch" aria-checked="${st.gcalEnabled}"></button>
       </div>
       ${st.gcalEnabled && !gcal.hasToken() && !gcal.isLoggingIn() ? `<button class="btn primary block" id="btn-gc-relogin">다시 로그인</button>` : ""}
       <div class="row" style="margin-top:4px">
-        <div class="row-main"><div class="row-title">Apple 캘린더 구독</div></div>
-        <button class="btn" style="min-height:40px;padding:0 16px" id="btn-gc-sub" ${st.gcalEnabled && st.gcalNudgeId ? "" : "disabled"}>이동</button>
+        <div class="row-main"><div class="row-title">캘린더 구독</div></div>
+        <button class="btn compact" id="btn-gc-sub" ${st.gcalEnabled && st.gcalNudgeId ? "" : "disabled"}>이동</button>
       </div>
     </div>
   `;
@@ -1173,7 +1160,6 @@ function viewSettings() {
 
   $("#sw-gcal")?.addEventListener("click", async () => {
     if (st.gcalEnabled) {
-      // OFF 시 로그인 관련 저장 상태를 전부 초기화 — 캐시 삭제 후 실행과 동일한 깨끗한 상태로 만든다
       st.gcalEnabled = false;
       st.gcalNudgeId = "";
       gcal.clearToken();
@@ -1194,7 +1180,7 @@ function viewSettings() {
   $("#btn-goal").addEventListener("click", () => {
     let gb = store.get().goalBase;
     openSheet(`
-      <h2>기본 학습 목표</h2>
+      <h2>학습 목표</h2>
       <p class="muted">평일 하루 학습할 강의 수를 설정합니다. 업무지시로 인한 당일 조정은 학습 탭에서 기록됩니다.</p>
       <div class="field"><label>하루 강의 목표</label>
         <div class="stepper" style="justify-content:center;padding:6px 0">
@@ -1216,7 +1202,7 @@ function viewSettings() {
   $("#btn-succ").addEventListener("click", () => {
     let sv = store.get().settings.successMin;
     openSheet(`
-      <h2>자습 성공 기준</h2>
+      <h2>성공 기준</h2>
       <p class="muted">주간 자습 달성률이 이 값 이상이면 '성공', 100%는 '완전 수행'으로 별도 표시됩니다. 60~100% 범위에서 설정하세요.</p>
       <div class="field"><label>성공 기준 (%)</label>
         <div class="stepper" style="justify-content:center;padding:6px 0">
@@ -1311,7 +1297,7 @@ function viewSettings() {
     const assign = { ...store.workoutAssign() };
     const BASIC_PARTS = ["등", "가슴", "어깨", "팔", "하체", "휴식"];
     openSheet(`
-      <h2>요일별 분할</h2>
+      <h2>요일 설정</h2>
       ${store.WEEKDAYS.map((w, i) => `
         <div class="row">
           <div class="row-main"><div class="row-title" style="font-size:15px">${w}</div></div>
@@ -1341,8 +1327,6 @@ export function render(scrollTop = false) {
   clearInterval(tickTimer);
   // 로그인 직후 캘린더 준비가 끊긴 상태면 어느 화면에서든 자동 복구
   {
-    // 재시작 후 1회만: 동기화가 켜져 있고 토큰이 있으면 저장된 nudge 캘린더를 검증/복구한다.
-    // 실패해도 재렌더만 하고 재시도하지 않는다(무한 루프 방지) — 토큰 만료 시 '다시 로그인' 버튼 노출
     const st = store.get().settings;
     if (!connectChecked && st.gcalEnabled && gcal.hasToken()) {
       connectChecked = true;
