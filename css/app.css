@@ -156,6 +156,10 @@ button {
   cursor: pointer;
   touch-action: manipulation;
 }
+.btn.compact {
+  min-height: 40px;
+  padding: 0 16px;
+}
 .btn {
   display: inline-flex;
   align-items: center;
@@ -532,11 +536,9 @@ input.ren:focus { outline: none; }
 .swipe-del svg { width: 19px; height: 19px; }
 .swipe-del:active { opacity: 0.8; }
 .swipe-wrap > .row {
-  transition: transform 0.4s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.25s ease;
-}
-.swipe-wrap > .row {
   position: relative;
   background: var(--bg-elevated);
+  touch-action: pan-y;
   transition: transform 0.28s var(--spring), opacity 0.2s;
 }
 
