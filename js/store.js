@@ -34,6 +34,7 @@ const DEFAULT_ROUTINES = {
 function defaultState() {
   return {
     schema: SCHEMA,
+    demo: false,
     created: Date.now(),
     schedule: DEFAULT_SCHEDULE.map((c) => ({ ...c })),
     goalBase: 10,
