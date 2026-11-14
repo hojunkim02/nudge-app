@@ -17,7 +17,7 @@ CPA 수험생을 위한 개인 학습·생활 관리 **PWA**. GitHub Pages(`gith
 
 ### 구글 캘린더 연동
 
-현재는 **연결까지만** 제공합니다: `설정 → 구글 캘린더 동기화` 스위치를 켜면 "Google 로그인" 버튼이 나타나고, 로그인하면 Calendar API 사용 권한이 부여됩니다(클라이언트 ID는 `js/gcal.js`의 `BUILTIN_CLIENT_ID`에 내장, 시크릿은 사용하지 않는 방식). 일정 추가·동기화 기능은 추후 구현 예정입니다.
+현재는 **연결까지만** 제공합니다: `설정 → 구글 캘린더 동기화` 스위치를 켜면 바로 Google 로그인 팝업이 열리고, 로그인하면 Calendar API 사용 권한이 부여됩니다. 로그인을 취소하거나 거부하면 스위치는 자동으로 꺼집니다(클라이언트 ID는 `js/gcal.js`의 `BUILTIN_CLIENT_ID`에 내장, 시크릿은 사용하지 않는 방식). 일정 추가·동기화 기능은 추후 구현 예정입니다.
 
 OAuth 클라이언트 ID 발급(최초 1회): Google Cloud Console → Calendar API 사용 설정 → OAuth 동의 화면(외부, 테스트 사용자에 본인 계정 추가) → OAuth 클라이언트 ID(웹 애플리케이션, 승인된 JavaScript 원본 `https://<username>.github.io`).
 
