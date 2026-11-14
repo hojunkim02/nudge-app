@@ -1000,14 +1000,16 @@ async function connectGoogle(st) {
     try {
       await finishConnect(st);
     } catch (e) {
+      // 토큰 만료: await 이후 팝업을 열면 iOS에서 제스처가 소실되어 차단되므로
+      // 자동 재로그인 대신 '다시 로그인' 버튼(사용자 탭 제스처에서 팝업)으로 유도
       if (!e.message.includes("만료")) throw e;
       gcal.clearToken();
-      await gcal.login(cid);
-      await finishConnect(st);
+      throw new Error("Google 로그인이 만료되었습니다. 아래 '다시 로그인' 버튼을 눌러 주세요");
     }
     return true;
   } catch (e) {
-    st.gcalEnabled = false;
+    // 만료 계열 오류는 스위치를 유지한 채 '다시 로그인' 버튼 노출 (취소/거부는 OFF 유지)
+    if (!/만료/.test(e.message || "")) st.gcalEnabled = false;
     store.save();
     render();
     toast(e.message || "Google 로그인이 취소되었습니다", 4000);
