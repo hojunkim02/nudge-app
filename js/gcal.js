@@ -144,16 +144,14 @@ export function publicIcsUrl(calendarId) {
   return `https://calendar.google.com/calendar/ical/${encodeURIComponent(calendarId)}/public/basic.ics`;
 }
 
-export function buildDayEvent(key, summary, nid) {
+export function buildDayEvent(key, title, timeText, nid) {
+  const base = { summary: title, extendedProperties: { private: { nudgeId: nid } } };
+  const m = String(timeText || "").match(/(\d{1,2}:\d{2})\s*[–\-~]\s*(\d{1,2}:\d{2})/);
+  if (m) return { ...base, start: { dateTime: `${key}T${m[1]}:00` }, end: { dateTime: `${key}T${m[2]}:00` } };
   const d = new Date(key + "T00:00:00");
   d.setDate(d.getDate() + 1);
   const p = (n) => String(n).padStart(2, "0");
-  return {
-    summary,
-    start: { date: key },
-    end: { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` },
-    extendedProperties: { private: { nudgeId: nid } },
-  };
+  return { ...base, start: { date: key }, end: { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` } };
 }
 export async function upsertEvent(calendarId, eventId, body) {
   if (eventId) {
