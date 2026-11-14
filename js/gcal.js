@@ -109,9 +109,23 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
-export async function listCalendars() {
+export async function findCalendarByName(name) {
   const r = await api("/users/me/calendarList?minAccessRole=writer");
-  return (r.items || []).map((c) => ({ id: c.id, title: c.summary }));
+  return (r.items || []).find((c) => (c.summaryOverride || c.summary) === name) || null;
+}
+export async function createCalendar(name) {
+  const cal = await api("/calendars", { method: "POST", body: JSON.stringify({ summary: name, timeZone: "Asia/Seoul" }) });
+  try { await api("/users/me/calendarList", { method: "POST", body: JSON.stringify({ id: cal.id }) }); } catch {}
+  return cal;
+}
+export async function makePublic(calendarId) {
+  try {
+    await api(`/calendars/${encodeURIComponent(calendarId)}/acl`, { method: "POST", body: JSON.stringify({ scope: { type: "default" }, role: "reader" }) });
+    return true;
+  } catch { return false; }
+}
+export function publicIcsUrl(calendarId) {
+  return `https://calendar.google.com/calendar/ical/${encodeURIComponent(calendarId)}/public/basic.ics`;
 }
 
 export async function upsertEvent(calendarId, eventId, body) {
@@ -122,10 +136,6 @@ export async function upsertEvent(calendarId, eventId, body) {
       if (!/오류 \(4\d\d\)/.test(e.message)) throw e;
     }
   }
-  return api(`/calendars/${encodeURIComponent(calendarId)}/events`, { method: "POST", body: JSON.stringify(body) });
-}
-
-export async function createEvent(calendarId, body) {
   return api(`/calendars/${encodeURIComponent(calendarId)}/events`, { method: "POST", body: JSON.stringify(body) });
 }
 
@@ -166,44 +176,4 @@ export function buildSessionEvent(sess) {
     end: { date: sess.date },
     extendedProperties: { private: { nudgeId: "sess:" + sess.id } },
   };
-}
-
-/* ── 사용자가 직접 추가하는 단일 일정 (순수 함수) ── */
-export function buildCustomEvent({ title, date, time, memo }) {
-  if (!title || !date) return null;
-  const body = {
-    summary: title,
-    start: { date },
-    end: { date },
-  };
-  const m = String(time || "").match(/(\d{1,2}):(\d{2})\D+(\d{1,2}):(\d{2})/);
-  if (m) {
-    const start = new Date(date + "T00:00:00");
-    start.setHours(+m[1], +m[2], 0, 0);
-    const end = new Date(start);
-    end.setHours(+m[3], +m[4], 0, 0);
-    body.start = { dateTime: start.toISOString(), timeZone: "Asia/Seoul" };
-    body.end = { dateTime: end.toISOString(), timeZone: "Asia/Seoul" };
-  }
-  if (memo) body.description = memo;
-  return body;
-}
-/* ── nudge 캘린더 생성/공개/구독 주소 ── */
-export async function findCalendarByName(name) {
-  const r = await api("/users/me/calendarList?minAccessRole=writer");
-  return (r.items || []).find((c) => (c.summaryOverride || c.summary) === name) || null;
-}
-export async function createCalendar(name) {
-  const cal = await api("/calendars", { method: "POST", body: JSON.stringify({ summary: name, timeZone: "Asia/Seoul" }) });
-  try { await api("/users/me/calendarList", { method: "POST", body: JSON.stringify({ id: cal.id }) }); } catch {}
-  return cal;
-}
-export async function makePublic(calendarId) {
-  try {
-    await api(`/calendars/${encodeURIComponent(calendarId)}/acl`, { method: "POST", body: JSON.stringify({ scope: { type: "default" }, role: "reader" }) });
-    return true;
-  } catch { return false; }
-}
-export function publicIcsUrl(calendarId) {
-  return `https://calendar.google.com/calendar/ical/${encodeURIComponent(calendarId)}/public/basic.ics`;
 }
