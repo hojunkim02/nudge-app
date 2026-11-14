@@ -127,8 +127,13 @@ function releaseAwake() {
   wakeLock = null;
 }
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && store.get().timer && !store.get().timer.pausedAt) keepAwake();
+  if (document.visibilityState === "visible") {
+    if (store.get().timer && !store.get().timer.pausedAt) keepAwake();
+    // 팝업 로그인에서 돌아온 직후 등, 항상 최신 상태로 다시 그린다
+    render();
+  }
 });
+window.addEventListener("pageshow", (e) => { if (e.persisted) render(); });
 
 /* ═════════ VIEW: TODAY ═════════ */
 let selDay = null;
@@ -1129,11 +1134,6 @@ function viewSettings() {
   titleEl.textContent = "설정";
   subEl.textContent = "화면 · 학습 · 운동";
   gcal.preload();
-  if (st.gcalEnabled && gcal.hasToken() && !st.gcalNudgeId && !nudgeRecovering) {
-    // 로그인 직후 페이지가 재시작되어 캘린더 준비가 끊긴 경우 자동 복구
-    nudgeRecovering = true;
-    finishConnect(st).catch(() => {}).finally(() => { nudgeRecovering = false; });
-  }
 
   ["system", "light", "dark"].forEach((mode) => {
     $("#th-" + mode).addEventListener("click", () => {
@@ -1328,6 +1328,14 @@ let prevTab = "today";
 
 export function render(scrollTop = false) {
   clearInterval(tickTimer);
+  // 로그인 직후 캘린더 준비가 끊긴 상태면 어느 화면에서든 자동 복구
+  {
+    const st = store.get().settings;
+    if (st.gcalEnabled && gcal.hasToken() && !st.gcalNudgeId && !nudgeRecovering) {
+      nudgeRecovering = true;
+      finishConnect(st).catch(() => {}).finally(() => { nudgeRecovering = false; });
+    }
+  }
   VIEWS[currentView]();
   if (currentView !== prevTab) {
     viewEl.classList.remove("slide-next", "slide-prev");
