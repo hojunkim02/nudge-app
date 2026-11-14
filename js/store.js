@@ -66,6 +66,7 @@ function defaultState() {
 
 function demoState() {
   const st = defaultState();
+  st.demo = true;
   const today = new Date();
   const dk = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const day = (n) => { const d = new Date(today); d.setDate(d.getDate() - n); return d; };
