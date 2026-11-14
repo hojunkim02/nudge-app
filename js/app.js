@@ -495,7 +495,7 @@ function viewStudy() {
               : `<div class="row-title edit-tap" data-edit-subject="${sub.id}">${esc(sub.name)}</div>`}
             <div class="row-sub">${sub.chapters.reduce((a, c) => a + c.lectures.length, 0)}강</div>
           </div>
-          <button class="btn icon-btn" aria-label="챕터 추가" data-add-chapter="${sub.id}" style="background:var(--accent);color:var(--on-fill)">${adding.level === "chapter" && adding.id === sub.id ? "취소" : PLUS_SVG}</button>
+          <button class="btn compact" data-add-chapter="${sub.id}" style="background:var(--accent);color:var(--on-fill)">${adding.level === "chapter" && adding.id === sub.id ? "취소" : "새 챕터"}</button>
         </div>
       </div>
       ${adding.level === "chapter" && adding.id === sub.id ? `<div style="padding-left:14px">${ADD_ROW("qa-chapter")}</div>` : ""}
@@ -506,7 +506,7 @@ function viewStudy() {
               <div class="row-main">${editing.level === "chapter" && editing.id === ch.id
                 ? `<input type="text" class="ren" id="ren-chapter" value="${esc(ch.name)}" style="font-size:14px">`
                 : `<div class="row-title edit-tap" style="font-size:14px" data-edit-chapter="${ch.id}">${esc(ch.name)}</div>`}</div>
-              <button class="btn icon-btn" style="min-width:34px;min-height:34px;background:var(--accent);color:var(--on-fill)" aria-label="강의 추가" data-add-lecture="${ch.id}">${adding.level === "lecture" && adding.id === ch.id ? "취소" : PLUS_SVG}</button>
+              <button class="btn compact" style="font-size:13px;background:var(--accent);color:var(--on-fill)" data-add-lecture="${ch.id}">${adding.level === "lecture" && adding.id === ch.id ? "취소" : "새 강의"}</button>
             </div>
           </div>
           ${adding.level === "lecture" && adding.id === ch.id ? `<div style="padding-left:14px">${ADD_ROW("qa-lecture")}</div>` : ""}
@@ -1038,6 +1038,30 @@ async function syncNudge(calId) {
   return jobs.length;
 }
 
+async function syncDayToGcal(key) {
+  const s = store.get();
+  const { gcalEnabled, gcalNudgeId } = s.settings;
+  if (!gcalEnabled || !gcalNudgeId || !gcal.hasToken()) return 0;
+  const map = s.gcalMap;
+  const jobs = [];
+  const done = store.dayChecks(key);
+  for (const it of store.checksForDate(new Date(key + "T00:00:00"))) {
+    if (!done[it.id]) continue;
+    const nid = `day:${key}:${it.id}`;
+    jobs.push(gcal.upsertEvent(gcalNudgeId, map[nid], gcal.buildDayEvent(key, `${it.title} ${it.time}`, nid)).then((ev) => { map[nid] = ev.id; }));
+  }
+  const mins = store.minutesOn(key);
+  if (mins > 0) {
+    const nid = `day:${key}:study`;
+    jobs.push(gcal.upsertEvent(gcalNudgeId, map[nid], gcal.buildDayEvent(key, `자습 ${fmtMin(mins)}`, nid)).then((ev) => { map[nid] = ev.id; }));
+  }
+  const LIMIT = 3;
+  for (let i = 0; i < jobs.length; i += LIMIT) await Promise.all(jobs.slice(i, i + LIMIT));
+  store.save();
+  return jobs.length;
+}
+const yesterdayKey = () => store.dateKey(new Date(Date.now() - 864e5));
+
 function viewSettings() {
   const s = store.get();
   const st = s.settings;
@@ -1331,9 +1355,32 @@ export function render(scrollTop = false) {
     if (!connectChecked && st.gcalEnabled && gcal.hasToken()) {
       connectChecked = true;
       const work = st.gcalNudgeId ? ensureNudgeCalendar(st) : finishConnect(st);
-      work.then(() => render()).catch(() => render());
+      work
+        .then(() => syncDayToGcal(yesterdayKey()))
+        .catch(() => {})
+        .finally(() => render());
     }
   }
+  const fab = $("#fab-day-pass");
+  if (store.get().demo && !fab) {
+    const b = document.createElement("button");
+    b.id = "fab-day-pass";
+    b.className = "fab";
+    b.textContent = "하루 경과";
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      try {
+        const n = await syncDayToGcal(yesterdayKey());
+        toast(n ? `구글 캘린더에 어제의 기록 ${n}건을 반영했습니다` : "반영할 어제의 기록이 없습니다");
+      } catch (e) {
+        toast(e.message || "구글 캘린더 반영 실패", 4000);
+      } finally {
+        b.disabled = false;
+      }
+    });
+    document.body.appendChild(b);
+  } else if (!store.get().demo && fab) fab.remove();
+
   VIEWS[currentView]();
   if (currentView !== prevTab) {
     viewEl.classList.remove("slide-next", "slide-prev");

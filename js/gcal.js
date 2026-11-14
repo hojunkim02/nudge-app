@@ -149,6 +149,17 @@ export function publicIcsUrl(calendarId) {
   return `https://calendar.google.com/calendar/ical/${encodeURIComponent(calendarId)}/public/basic.ics`;
 }
 
+export function buildDayEvent(key, summary, nid) {
+  const d = new Date(key + "T00:00:00");
+  d.setDate(d.getDate() + 1);
+  const p = (n) => String(n).padStart(2, "0");
+  return {
+    summary,
+    start: { date: key },
+    end: { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` },
+    extendedProperties: { private: { nudgeId: nid } },
+  };
+}
 export async function upsertEvent(calendarId, eventId, body) {
   if (eventId) {
     try {
