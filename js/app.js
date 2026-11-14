@@ -1057,34 +1057,6 @@ function viewSettings() {
 
   viewEl.innerHTML = `
     <div class="card">
-      <p class="card-title">화면 모드</p>
-      <div class="row">
-        <div class="row-main">
-          <div class="row-title">테마</div>
-        </div>
-        <div class="segment" style="margin:0;width:180px">
-          <button class="${st.theme === "system" ? "active" : ""}" id="th-system">시스템</button>
-          <button class="${st.theme === "light" ? "active" : ""}" id="th-light">라이트</button>
-          <button class="${st.theme === "dark" ? "active" : ""}" id="th-dark">다크</button>
-        </div>
-      </div>
-      <div class="row">
-        <div class="row-main">
-          <div class="row-title">흑백 모드</div>
-        </div>
-        <button class="switch ${st.bw ? "on" : ""}" id="sw-bw" role="switch" aria-checked="${st.bw}"></button>
-      </div>
-    </div>
-    <div class="card">
-      <p class="card-title">알림</p>
-      <div class="row">
-        <div class="row-main">
-          <div class="row-title">일정 알림</div>
-        </div>
-        <button class="switch ${st.notify ? "on" : ""}" id="sw-notify" role="switch" aria-checked="${st.notify}"></button>
-      </div>
-    </div>
-    <div class="card">
       <p class="card-title">학습 설정</p>
       <div class="row">
         <div class="row-main">
@@ -1121,9 +1093,37 @@ function viewSettings() {
       </div>
     </div>
     <div class="card">
-      <p class="card-title">구글 캘린더 동기화</p>
+      <p class="card-title">화면 모드</p>
       <div class="row">
-        <div class="row-main"><div class="row-title">동기화</div></div>
+        <div class="row-main">
+          <div class="row-title">테마</div>
+        </div>
+        <div class="segment" style="margin:0;width:180px">
+          <button class="${st.theme === "system" ? "active" : ""}" id="th-system">시스템</button>
+          <button class="${st.theme === "light" ? "active" : ""}" id="th-light">라이트</button>
+          <button class="${st.theme === "dark" ? "active" : ""}" id="th-dark">다크</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title">흑백 모드</div>
+        </div>
+        <button class="switch ${st.bw ? "on" : ""}" id="sw-bw" role="switch" aria-checked="${st.bw}"></button>
+      </div>
+    </div>
+    <div class="card">
+      <p class="card-title">알림</p>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title">일정 알림</div>
+        </div>
+        <button class="switch ${st.notify ? "on" : ""}" id="sw-notify" role="switch" aria-checked="${st.notify}"></button>
+      </div>
+    </div>
+    <div class="card">
+      <p class="card-title">동기화</p>
+      <div class="row">
+        <div class="row-main"><div class="row-title">Google 캘린더 생성</div></div>
         <button class="switch ${st.gcalEnabled ? "on" : ""}" id="sw-gcal" role="switch" aria-checked="${st.gcalEnabled}"></button>
       </div>
       ${st.gcalEnabled && !gcal.hasToken() && !gcal.isLoggingIn() ? `<button class="btn primary block" id="btn-gc-relogin">다시 로그인</button>` : ""}
