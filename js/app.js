@@ -975,9 +975,9 @@ let nudgeRecovering = false;
 async function finishConnect(st) {
   toast("nudge 캘린더를 준비하는 중…", 1500);
   const calId = await ensureNudgeCalendar(st);
+  render(); // 캘린더가 생기는 즉시 '이동' 버튼 활성화
   const n = await syncNudge(calId);
-  toast(`nudge 캘린더가 준비되었습니다 (${n}개 항목)`);
-  render();
+  toast(`구글 캘린더에 ${n}개 항목을 채웠습니다`);
 }
 async function connectGoogle(st) {
   const cid = gcal.BUILTIN_CLIENT_ID || st.gcalClientId;
@@ -1024,28 +1024,27 @@ async function syncNudge(calId) {
   const s = store.get();
   const map = s.gcalMap;
   const keep = new Set();
-  let pushed = 0;
+  const jobs = [];
   for (const it of s.schedule) {
     const nid = "sched:" + it.id;
     const body = gcal.buildScheduleEvent(it);
     if (!body) continue;
     keep.add(nid);
-    const ev = await gcal.upsertEvent(calId, map[nid], body);
-    map[nid] = ev.id; pushed++;
+    jobs.push(gcal.upsertEvent(calId, map[nid], body).then((ev) => { map[nid] = ev.id; }));
   }
   for (const sess of s.sessions) {
     const nid = "sess:" + sess.id;
     const body = gcal.buildSessionEvent(sess);
     if (!body) continue;
     keep.add(nid);
-    const ev = await gcal.upsertEvent(calId, map[nid], body);
-    map[nid] = ev.id; pushed++;
+    jobs.push(gcal.upsertEvent(calId, map[nid], body).then((ev) => { map[nid] = ev.id; }));
   }
+  await Promise.all(jobs);
   for (const [nid, eid] of Object.entries({ ...map })) {
     if (!keep.has(nid) && await gcal.deleteEvent(calId, eid)) delete map[nid];
   }
   store.save();
-  return pushed;
+  return jobs.length;
 }
 
 function viewSettings() {
