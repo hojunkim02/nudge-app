@@ -1113,20 +1113,8 @@ function viewSettings() {
         <div class="row-main"><div class="row-title">동기화</div></div>
         <button class="switch ${st.gcalEnabled ? "on" : ""}" id="sw-gcal" role="switch" aria-checked="${st.gcalEnabled}"></button>
       </div>
-      ${st.gcalEnabled ? `<p class="muted">${gcal.isLoggingIn() ? "Google 로그인 창이 열려 있습니다…" : gcal.hasToken() ? "연결됨 · nudge 캘린더가 구글에 있습니다" : "로그인이 완료되지 않았거나 만료되었습니다."}</p>
       ${st.gcalEnabled && !gcal.hasToken() && !gcal.isLoggingIn() ? `<button class="btn primary block" id="btn-gc-relogin">다시 로그인</button>` : ""}
-      ${st.gcalNudgeId ? `
-      <p class="muted">외부 캘린더(Apple 캘린더 등) 구독 주소:</p>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="text" readonly value="${esc(gcal.publicIcsUrl(st.gcalNudgeId))}" id="gc-url" style="min-height:40px;font-size:12px">
-        <button class="btn" style="min-height:40px;padding:0 14px;flex:none" id="btn-gc-copy">복사</button>
-      </div>
-      <div class="row" style="margin-top:6px">
-        <div class="row-main"><div class="row-title">Apple 캘린더에서 구독</div></div>
-        <button class="btn primary" style="min-height:40px;padding:0 16px" id="btn-gc-sub">구독</button>
-      </div>
-      <p class="muted">구독 버튼을 누르면 기기의 구독 확인 창이 열립니다. 열리지 않으면 주소를 복사해 직접 추가하세요.</p>
-      <p class="muted">주소를 아는 사람은 누구나 이 캘린더를 읽을 수 있습니다.</p>` : ""}` : ""}
+      ${st.gcalEnabled && st.gcalNudgeId ? `<button class="btn primary block" id="btn-gc-sub" style="margin-top:8px">Apple 캘린더 구독</button>` : ""}
     </div>
   `;
 
@@ -1173,21 +1161,9 @@ function viewSettings() {
   });
   $("#btn-gc-relogin")?.addEventListener("click", () => connectGoogle(st));
 
-  $("#btn-gc-copy")?.addEventListener("click", async () => {
-    const url = $("#gc-url")?.value || "";
-    try {
-      await navigator.clipboard.writeText(url);
-      toast("구독 주소를 복사했습니다");
-    } catch {
-      $("#gc-url")?.select();
-      toast("주소를 길게 눌러 복사하세요");
-    }
-  });
-
   $("#btn-gc-sub")?.addEventListener("click", () => {
-    const url = $("#gc-url")?.value || "";
-    if (!url) return;
-    const webcal = "webcal://" + url.replace(/^https?:\/\//, "");
+    if (!st.gcalNudgeId) return;
+    const webcal = "webcal://" + gcal.publicIcsUrl(st.gcalNudgeId).replace(/^https?:\/\//, "");
     try { location.href = webcal; } catch {}
   });
 
