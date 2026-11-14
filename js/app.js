@@ -966,6 +966,45 @@ function openScheduleEdit() {
   });
 }
 
+async function ensureNudgeCalendar(st) {
+  let calId = st.gcalNudgeId;
+  if (!calId) {
+    const found = await gcal.findCalendarByName("nudge");
+    calId = found ? found.id : (await gcal.createCalendar("nudge")).id;
+    await gcal.makePublic(calId);
+    st.gcalNudgeId = calId;
+  }
+  store.save();
+  return calId;
+}
+async function syncNudge(calId) {
+  const s = store.get();
+  const map = s.gcalMap;
+  const keep = new Set();
+  let pushed = 0;
+  for (const it of s.schedule) {
+    const nid = "sched:" + it.id;
+    const body = gcal.buildScheduleEvent(it);
+    if (!body) continue;
+    keep.add(nid);
+    const ev = await gcal.upsertEvent(calId, map[nid], body);
+    map[nid] = ev.id; pushed++;
+  }
+  for (const sess of s.sessions) {
+    const nid = "sess:" + sess.id;
+    const body = gcal.buildSessionEvent(sess);
+    if (!body) continue;
+    keep.add(nid);
+    const ev = await gcal.upsertEvent(calId, map[nid], body);
+    map[nid] = ev.id; pushed++;
+  }
+  for (const [nid, eid] of Object.entries({ ...map })) {
+    if (!keep.has(nid) && await gcal.deleteEvent(calId, eid)) delete map[nid];
+  }
+  store.save();
+  return pushed;
+}
+
 function viewSettings() {
   const s = store.get();
   const st = s.settings;
@@ -1041,7 +1080,14 @@ function viewSettings() {
         <div class="row-main"><div class="row-title">동기화</div></div>
         <button class="switch ${st.gcalEnabled ? "on" : ""}" id="sw-gcal" role="switch" aria-checked="${st.gcalEnabled}"></button>
       </div>
-      ${st.gcalEnabled ? `<p class="muted">${gcal.hasToken() ? "연결됨 · Calendar API 사용 준비 완료" : "Google 로그인 창을 여는 중…"}</p>` : ""}
+      ${st.gcalEnabled ? `<p class="muted">${gcal.hasToken() ? "연결됨 · nudge 캘린더가 구글에 있습니다" : "Google 로그인 창을 여는 중…"}</p>
+      ${st.gcalNudgeId ? `
+      <p class="muted">외부 캘린더(Apple 캘린더 등) 구독 주소:</p>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" readonly value="${esc(gcal.publicIcsUrl(st.gcalNudgeId))}" id="gc-url" style="min-height:40px;font-size:12px">
+        <button class="btn" style="min-height:40px;padding:0 14px;flex:none" id="btn-gc-copy">복사</button>
+      </div>
+      <p class="muted">주소를 아는 사람은 누구나 이 캘린더를 읽을 수 있습니다.</p>` : ""}` : ""}
     </div>
   `;
 
@@ -1091,13 +1137,27 @@ function viewSettings() {
     if (gcal.hasToken()) return;
     try {
       await gcal.login(cid);
-      toast("Google 계정에 연결되었습니다");
+      toast("nudge 캘린더를 준비하는 중…", 1500);
+      const calId = await ensureNudgeCalendar(st);
+      const n = await syncNudge(calId);
+      toast(`nudge 캘린더가 준비되었습니다 (${n}개 항목)`);
       render();
     } catch (e) {
       st.gcalEnabled = false;
       store.save();
       render();
       toast(e.message || "Google 로그인이 취소되었습니다", 4000);
+    }
+  });
+
+  $("#btn-gc-copy")?.addEventListener("click", async () => {
+    const url = $("#gc-url")?.value || "";
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("구독 주소를 복사했습니다");
+    } catch {
+      $("#gc-url")?.select();
+      toast("주소를 길게 눌러 복사하세요");
     }
   });
 

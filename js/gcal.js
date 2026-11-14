@@ -144,3 +144,22 @@ export function buildCustomEvent({ title, date, time, memo }) {
   if (memo) body.description = memo;
   return body;
 }
+/* ── nudge 캘린더 생성/공개/구독 주소 ── */
+export async function findCalendarByName(name) {
+  const r = await api("/users/me/calendarList?minAccessRole=writer");
+  return (r.items || []).find((c) => (c.summaryOverride || c.summary) === name) || null;
+}
+export async function createCalendar(name) {
+  const cal = await api("/calendars", { method: "POST", body: JSON.stringify({ summary: name, timeZone: "Asia/Seoul" }) });
+  try { await api("/users/me/calendarList", { method: "POST", body: JSON.stringify({ id: cal.id }) }); } catch {}
+  return cal;
+}
+export async function makePublic(calendarId) {
+  try {
+    await api(`/calendars/${encodeURIComponent(calendarId)}/acl`, { method: "POST", body: JSON.stringify({ scope: { type: "default" }, role: "reader" }) });
+    return true;
+  } catch { return false; }
+}
+export function publicIcsUrl(calendarId) {
+  return `https://calendar.google.com/calendar/ical/${encodeURIComponent(calendarId)}/public/basic.ics`;
+}
