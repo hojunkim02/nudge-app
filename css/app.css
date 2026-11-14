@@ -98,7 +98,9 @@ body {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
 }
 .app-header h1 {
   font-size: 28px;
@@ -378,7 +380,9 @@ select:active { transform: scale(0.97); }
   max-height: 86dvh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  background: var(--bg-elevated);
+  background: color-mix(in srgb, var(--bg-elevated) 86%, transparent);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
   border-radius: 22px 22px 0 0;
   padding: 10px 16px calc(env(safe-area-inset-bottom, 0px) + 20px);
   z-index: 41;
@@ -552,7 +556,9 @@ input.ren:focus { outline: none; }
   padding: 0 18px;
   border: none;
   border-radius: 22px;
-  background: var(--accent);
+  background: color-mix(in srgb, var(--accent) 85%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
   color: var(--on-fill);
   font-size: 15px;
   font-weight: 700;
@@ -573,7 +579,9 @@ input.ren:focus { outline: none; }
   pointer-events: none;
 }
 .toast {
-  background: var(--fg);
+  background: color-mix(in srgb, var(--fg) 82%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
   color: var(--bg);
   font-size: 14px;
   font-weight: 600;
