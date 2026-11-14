@@ -69,6 +69,10 @@ export async function upsertEvent(calendarId, eventId, body) {
   return api(`/calendars/${encodeURIComponent(calendarId)}/events`, { method: "POST", body: JSON.stringify(body) });
 }
 
+export async function createEvent(calendarId, body) {
+  return api(`/calendars/${encodeURIComponent(calendarId)}/events`, { method: "POST", body: JSON.stringify(body) });
+}
+
 export async function deleteEvent(calendarId, eventId) {
   try {
     await api(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, { method: "DELETE" });
@@ -106,4 +110,25 @@ export function buildSessionEvent(sess) {
     end: { date: sess.date },
     extendedProperties: { private: { nudgeId: "sess:" + sess.id } },
   };
+}
+
+/* ── 사용자가 직접 추가하는 단일 일정 (순수 함수) ── */
+export function buildCustomEvent({ title, date, time, memo }) {
+  if (!title || !date) return null;
+  const body = {
+    summary: title,
+    start: { date },
+    end: { date },
+  };
+  const m = String(time || "").match(/(\d{1,2}):(\d{2})\D+(\d{1,2}):(\d{2})/);
+  if (m) {
+    const start = new Date(date + "T00:00:00");
+    start.setHours(+m[1], +m[2], 0, 0);
+    const end = new Date(start);
+    end.setHours(+m[3], +m[4], 0, 0);
+    body.start = { dateTime: start.toISOString(), timeZone: "Asia/Seoul" };
+    body.end = { dateTime: end.toISOString(), timeZone: "Asia/Seoul" };
+  }
+  if (memo) body.description = memo;
+  return body;
 }

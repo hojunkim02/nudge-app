@@ -1078,9 +1078,11 @@ function viewSettings() {
       </div>
       <div style="display:flex;gap:10px;padding:8px 0 6px">
         <button class="btn" id="btn-gc-connect">연결</button>
+        <button class="btn" id="btn-gc-add">일정 추가</button>
         <button class="btn primary" id="btn-gc-sync">지금 동기화</button>
       </div>
       ${st.gcalSyncedAt ? `<p class="muted">마지막 동기화: ${new Date(st.gcalSyncedAt).toLocaleString("ko-KR")}</p>` : `<p class="muted">일정 항목은 주간 반복 일정으로, 자습 세션은 종일 일정으로 업데이트됩니다.</p>`}
+      <p class="muted">클라이언트 ID 발급: Google Cloud Console에서 Calendar API를 사용 설정한 뒤, OAuth 클라이언트 ID(웹 애플리케이션)를 만들고 승인된 JavaScript 원본에 이 사이트의 주소(예: https://hojunkim02.github.io)를 추가하세요.</p>
     </div>
   `;
 
@@ -1135,6 +1137,38 @@ function viewSettings() {
       toast("Google 계정에 연결했습니다");
     } catch (e) { toast(e.message, 5000); }
   });
+  $("#btn-gc-add")?.addEventListener("click", () => {
+    openSheet(`
+      <h2>구글 캘린더에 일정 추가</h2>
+      <div class="field"><label>제목</label><input type="text" id="ce-title" placeholder="예: 모의고사"></div>
+      <div class="field"><label>날짜</label><input type="date" id="ce-date"></div>
+      <div class="field"><label>시간 (선택)</label><input type="text" id="ce-time" placeholder="예: 19:00–20:30 · 비우면 종일"></div>
+      <div class="field"><label>메모 (선택)</label><input type="text" id="ce-memo"></div>
+      <button class="btn primary block" id="ce-save">캘린더에 추가</button>
+    `, (sheet, close) => {
+      $("#ce-date", sheet).value = store.dateKey();
+      $("#ce-save", sheet).addEventListener("click", async () => {
+        const clientId = $("#gc-id")?.value.trim() || st.gcalClientId;
+        if (!clientId) { toast("먼저 OAuth 클라이언트 ID를 입력해 주세요"); return; }
+        if (!st.gcalCalendarId) { toast("캘린더를 선택해 주세요"); return; }
+        const body = gcal.buildCustomEvent({
+          title: $("#ce-title", sheet).value.trim(),
+          date: $("#ce-date", sheet).value,
+          time: $("#ce-time", sheet).value.trim(),
+          memo: $("#ce-memo", sheet).value.trim(),
+        });
+        if (!body) { toast("제목과 날짜를 입력해 주세요"); return; }
+        toast("추가 중…", 1500);
+        try {
+          if (!gcal.hasToken()) await gcal.login(clientId);
+          await gcal.createEvent(st.gcalCalendarId, body);
+          close();
+          toast("구글 캘린더에 일정을 추가했습니다");
+        } catch (e) { toast(e.message, 6000); }
+      });
+    });
+  });
+
   $("#btn-gc-sync")?.addEventListener("click", async () => {
     const cid = $("#gc-id")?.value.trim() || st.gcalClientId;
     if (!cid) { toast("OAuth 클라이언트 ID를 입력해 주세요"); return; }
