@@ -123,8 +123,8 @@ async function api(path, opts = {}) {
 
 export async function calendarExists(calendarId) {
   try {
-    await api(`/calendars/${encodeURIComponent(calendarId)}`);
-    return true;
+    const cal = await api(`/calendars/${encodeURIComponent(calendarId)}`);
+    return !cal.deleted; // 삭제 보류(trash) 상태면 없는 것으로 취급
   } catch (e) {
     if (/Google API 오류 4\d\d/.test(e.message)) return false;
     throw e;
@@ -132,7 +132,7 @@ export async function calendarExists(calendarId) {
 }
 export async function findCalendarByName(name) {
   const r = await api("/users/me/calendarList?minAccessRole=writer");
-  return (r.items || []).find((c) => (c.summaryOverride || c.summary) === name) || null;
+  return (r.items || []).find((c) => !c.deleted && !c.hidden && (c.summaryOverride || c.summary) === name) || null;
 }
 export async function createCalendar(name) {
   const cal = await api("/calendars", { method: "POST", body: JSON.stringify({ summary: name, timeZone: "Asia/Seoul" }) });
