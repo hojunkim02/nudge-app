@@ -56,6 +56,7 @@ function defaultState() {
       theme: "system",
       notify: false,
       successMin: 80,
+      gcalEnabled: false,
       gcalClientId: "",
       gcalCalendarId: "",
       gcalSyncedAt: null
