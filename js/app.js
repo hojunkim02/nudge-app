@@ -993,11 +993,10 @@ async function connectGoogle(st) {
   store.save();
   render();
   try {
-    if (!gcal.hasToken()) {
-      await gcal.login(cid);
-      toast("Google 계정에 연결되었습니다");
-      render();
-    }
+    // 스위치를 켤 때는 저장된 토큰에 기대지 않고 항상 새로 로그인한다 (단순·확실)
+    await gcal.login(cid);
+    toast("Google 계정에 연결되었습니다");
+    render();
     try {
       await finishConnect(st);
     } catch (e) {
