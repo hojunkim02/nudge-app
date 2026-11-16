@@ -72,15 +72,43 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (!raw) return defaultState();
     const data = JSON.parse(raw);
+    if (!data || typeof data !== "object" || Array.isArray(data)) return defaultState();
     const base = defaultState();
-    const st = { ...base, ...data, settings: { ...base.settings, ...(data.settings || {}) }, goal: { ...base.goal, ...(data.goal || {}) }, workout: { ...base.workout, ...(data.workout || {}) } };
-    if (!Array.isArray(st.schedule) || !st.schedule.length) st.schedule = base.schedule;
+    const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
+    const st = { ...base, ...data };
+    st.settings = isObj(data.settings) ? { ...base.settings, ...data.settings } : base.settings;
+    st.goal = isObj(data.goal) ? { ...base.goal, ...data.goal } : base.goal;
+    st.workout = isObj(data.workout) ? { ...base.workout, ...data.workout } : base.workout;
+    st.checks = isObj(data.checks) ? data.checks : {};
+    st.lunch = isObj(data.lunch) ? data.lunch : {};
+    st.gcalMap = isObj(data.gcalMap) ? data.gcalMap : {};
+    st.sessions = Array.isArray(data.sessions) ? data.sessions : [];
+    st.subjects = Array.isArray(data.subjects) ? data.subjects : [];
+    st.logs = Array.isArray(data.logs) ? data.logs : [];
+    st.schedule = (Array.isArray(data.schedule) ? data.schedule : [])
+      .filter((c) => isObj(c) && typeof c.id === "string")
+      .map((c) => ({
+        ...c,
+        title: typeof c.title === "string" ? c.title : "",
+        time: typeof c.time === "string" ? c.time : "하루 종일",
+        days: (Array.isArray(c.days) ? c.days : []).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6),
+        optional: !!c.optional,
+      }));
+    if (!st.schedule.length) st.schedule = base.schedule;
     if (typeof st.goalBase !== "number") st.goalBase = 10;
-    if (!st.workout || typeof st.workout !== "object") st.workout = base.workout;
-    if (!st.workout.assign) st.workout.assign = base.workout.assign;
-    if (!st.workout.routines || typeof st.workout.routines !== "object") st.workout.routines = base.workout.routines;
-    if (!st.workout.progress) st.workout.progress = { date: null, done: 0 };
+    if (typeof st.goal.daily !== "number") st.goal.daily = base.goal.daily;
+    if (!Array.isArray(st.goal.adjustLog)) st.goal.adjustLog = [];
+    st.workout.assign = isObj(st.workout.assign) ? st.workout.assign : base.workout.assign;
+    st.workout.routines = isObj(st.workout.routines) ? st.workout.routines : base.workout.routines;
+    st.workout.progress = isObj(st.workout.progress)
+      ? { date: st.workout.progress.date ?? null, done: Number.isFinite(st.workout.progress.done) ? st.workout.progress.done : 0 }
+      : { date: null, done: 0 };
     if (!Array.isArray(st.workout.history)) st.workout.history = [];
+    if (!isObj(st.timer) || typeof st.timer.start !== "number" || typeof st.timer.label !== "string") st.timer = null;
+    else {
+      st.timer.pausedAt = typeof st.timer.pausedAt === "number" ? st.timer.pausedAt : null;
+      st.timer.pauseAccum = Number.isFinite(st.timer.pauseAccum) ? st.timer.pauseAccum : 0;
+    }
     return st;
   } catch {
     return defaultState();

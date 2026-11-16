@@ -88,7 +88,7 @@ function makeSwipeable(row, onDelete) {
   };
   const move = (x) => {
     if (startX == null) return;
-    dx = Math.min(0, Math.max(-140, x - startX + (open ? -0 : 0)));
+    dx = Math.min(0, Math.max(-140, x - startX + (open ? -84 : 0)));
     if (open && dx > -84) dx = Math.min(0, dx);
     row.style.transform = `translateX(${dx}px)`;
   };
@@ -144,16 +144,17 @@ function viewToday() {
   const selDate = new Date(key + "T00:00:00");
   const checks = store.checksForDate(selDate);
   const done = store.dayChecks(key);
-  const doneCount = checks.filter((c) => done[c.id]).length;
+  const todayLunch = s.lunch[key];
+  const lunchDecided = todayLunch !== undefined;
+  const isChecked = (c, dn = done) => !!dn[c.id] || (c.optional && s.lunch[key] === "no");
+  const doneCount = checks.filter((c) => isChecked(c)).length;
   const pct = checks.length ? Math.round((doneCount / checks.length) * 100) : 0;
   const todayMin = store.minutesOn(key);
 
-  const todayLunch = s.lunch[key];
   const lunchCheck = checks.find((c) => c.id === "lunch" || c.title.includes("점심"));
   const lunchId = lunchCheck?.id ?? "lunch";
   const lunchYes = store.lunchThisWeek();
-  const lunchDecided = todayLunch !== undefined;
-  if (lunchCheck) lunchCheck.hidden = !lunchDecided && todayLunch !== "yes";
+  const lunchHidden = !!lunchCheck && !lunchDecided;
 
   const week = store.startOfWeek();
   const strip = Array.from({ length: 7 }, (_, i) => {
@@ -205,14 +206,20 @@ function viewToday() {
   if (isToday) {
     const mins = hmNow.split(":").map(Number);
     const cur = mins[0] * 60 + mins[1];
-    for (const c of checks) {
-      const m = c.time.match(/(\d{1,2}):(\d{2})/g);
-      if (!m || m.length < 2) continue;
-      const [sh, sm] = m[0].split(":").map(Number);
-      const [eh, em] = m[1].split(":").map(Number);
-      if (cur >= sh * 60 + sm && cur < eh * 60 + em) nowItem = c;
-      else if (cur < sh * 60 + sm && !nextItem) nextItem = c;
+    const timed = checks
+      .map((c) => {
+        const m = c.time.match(/(\d{1,2}):(\d{2})/g);
+        if (!m || m.length < 2) return null;
+        const [sh, sm] = m[0].split(":").map(Number);
+        const [eh, em] = m[1].split(":").map(Number);
+        return { c, s: sh * 60 + sm, e: eh * 60 + em };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.s - b.s);
+    for (const t of timed) {
+      if (cur >= t.s && cur < t.e) { nowItem = t.c; break; }
     }
+    nextItem = (timed.find((t) => t.s > cur) || {}).c || null;
   }
 
   viewEl.innerHTML = `
@@ -270,7 +277,7 @@ function viewToday() {
     <div class="card">
       <p class="card-title">${isToday ? "오늘의 일정" : "일정"}</p>
       ${checks.map((c) => `
-        <div class="row ${done[c.id] ? "done" : ""}" data-check="${c.id}" data-date="${key}" ${lunchCheck && c.id === "lunch" && lunchCheck.hidden ? 'style="display:none"' : ""}>
+        <div class="row ${isChecked(c) ? "done" : ""}" data-check="${c.id}" data-date="${key}" ${lunchCheck && c.id === lunchCheck.id && lunchHidden ? 'style="display:none"' : ""}>
           <button class="check" aria-label="${esc(c.title)} 완료">${CHECK_SVG}</button>
           <div class="row-main">
             <div class="row-title">${esc(c.title)}</div>
@@ -296,14 +303,20 @@ function viewToday() {
       if (!e.target.closest(".check")) return;
       const on = store.toggleCheck(key, row.dataset.check);
       syncCheckNow(key, row.dataset.check, on);
-      row.classList.toggle("done", on);
       const snap = store.dayChecks(key);
-      const done2 = checks.reduce((a, c) => a + (c.id === row.dataset.check ? on : !!snap[c.id]), 0);
+      const item = checks.find((c) => c.id === row.dataset.check);
+      row.classList.toggle("done", isChecked(item || { id: row.dataset.check }, snap));
+      const done2 = checks.reduce((a, c) => a + (isChecked(c, snap) ? 1 : 0), 0);
       const pct2 = Math.round((done2 / Math.max(1, checks.length)) * 100);
       const ring = $(".ring .fill", viewEl);
       if (ring) ring.style.strokeDashoffset = 295.3 * (1 - pct2 / 100);
       const lbl = $("#ring-label", viewEl);
       if (lbl) lbl.innerHTML = `${pct2}%<small id="ring-count">${done2}/${checks.length} 완료</small>`;
+      const dot = $(`.day-dot[data-day="${key}"]`, viewEl);
+      if (dot) {
+        const all = checks.length && checks.every((c) => isChecked(c, snap));
+        dot.classList.toggle("done", !!all);
+      }
     });
   });
 
@@ -367,6 +380,7 @@ function viewToday() {
 }
 
 function openAdjustSheet(sess, measured) {
+  if (!sess) return;
   openSheet(`
     <h2>자습 종료</h2>
     <p class="muted">측정된 시간은 ${fmtMin(measured)}입니다. 실제 공부시간을 조정하시겠습니까?</p>
@@ -931,6 +945,7 @@ function openScheduleEdit() {
         $("#si-save", sheet2).addEventListener("click", () => {
           const title = $("#si-title", sheet2).value.trim();
           const time = $("#si-time", sheet2).value.trim();
+          if (!days.length) { toast("요일을 하나 이상 선택하세요"); return; }
           if (title) store.updateScheduleItem(it.id, { title, time: time || it.time, days });
           close2();
         });
@@ -1184,6 +1199,7 @@ function viewSettings() {
     if (st.gcalEnabled) {
       st.gcalEnabled = false;
       st.gcalNudgeId = "";
+      store.get().gcalMap = {};
       gcal.clearToken();
       store.save();
       render();

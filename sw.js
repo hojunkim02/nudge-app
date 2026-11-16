@@ -1,4 +1,4 @@
-const CACHE = "nudge-v5";
+const CACHE = "nudge-v6";
 const ASSETS = [
   "./",
   "./index.html",
@@ -6,7 +6,7 @@ const ASSETS = [
   "./css/app.css",
   "./js/app.js",
   "./js/store.js",
-  "./js/caldav.js",
+  "./js/gcal.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/maskable-512.png",

@@ -163,7 +163,7 @@ export async function upsertEvent(calendarId, eventId, body) {
     try {
       return await api(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, { method: "PATCH", body: JSON.stringify(body) });
     } catch (e) {
-      if (!/오류 \(4\d\d\)/.test(e.message)) throw e;
+      if (!/오류 4\d\d/.test(e.message)) throw e;
     }
   }
   return api(`/calendars/${encodeURIComponent(calendarId)}/events`, { method: "POST", body: JSON.stringify(body) });
@@ -174,7 +174,7 @@ export async function deleteEvent(calendarId, eventId) {
     await api(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, { method: "DELETE" });
     return true;
   } catch (e) {
-    return /오류 \(4\d\d\)/.test(e.message);
+    return /오류 4\d\d/.test(e.message);
   }
 }
 
