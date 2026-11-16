@@ -1,6 +1,7 @@
 // Nudge store — localStorage persistence + schedule engine
 const KEY = "nudge.data.v1";
 const SCHEMA = 1;
+export const MAX_SESSION_MIN = 1440; // 세션 1회 기록 상한 (24시간)
 
 export const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -82,7 +83,14 @@ function load() {
     st.checks = isObj(data.checks) ? data.checks : {};
     st.lunch = isObj(data.lunch) ? data.lunch : {};
     st.gcalMap = isObj(data.gcalMap) ? data.gcalMap : {};
-    st.sessions = Array.isArray(data.sessions) ? data.sessions : [];
+    st.sessions = (Array.isArray(data.sessions) ? data.sessions : [])
+      .filter((x) => isObj(x) && typeof x.id === "string")
+      .map((x) => ({
+        ...x,
+        measuredMin: Number.isFinite(x.measuredMin) ? Math.max(0, Math.min(MAX_SESSION_MIN, x.measuredMin)) : 0,
+        finalMin: Number.isFinite(x.finalMin) ? Math.max(0, Math.min(MAX_SESSION_MIN, x.finalMin)) : 0,
+        status: x.status === "finalized" ? "finalized" : "pending",
+      }));
     st.subjects = Array.isArray(data.subjects) ? data.subjects : [];
     st.logs = Array.isArray(data.logs) ? data.logs : [];
     st.schedule = (Array.isArray(data.schedule) ? data.schedule : [])
@@ -249,7 +257,7 @@ export function stopTimer() {
   const t = state.timer;
   if (!t) return null;
   state.timer = null;
-  const measured = Math.max(0, Math.round(timerElapsedSecOf(t) / 60));
+  const measured = Math.min(MAX_SESSION_MIN, Math.max(0, Math.round(timerElapsedSecOf(t) / 60)));
   const s = {
     id: crypto.randomUUID(),
     date: dateKey(new Date(t.start)),
@@ -272,7 +280,7 @@ function timerElapsedSecOf(t) {
 export function finalizeSession(id, finalMin, reason = "") {
   const s = state.sessions.find((x) => x.id === id);
   if (!s) return null;
-  s.finalMin = Math.max(0, finalMin);
+  s.finalMin = Number.isFinite(finalMin) ? Math.max(0, Math.min(MAX_SESSION_MIN, finalMin)) : s.measuredMin;
   s.status = "finalized";
   if (reason && s.finalMin !== s.measuredMin) {
     state.logs.push({ type: "time-correction", date: s.date, from: s.measuredMin, to: s.finalMin, reason, at: Date.now() });
@@ -382,7 +390,7 @@ export function logLectureDone(id, name) {
 }
 export function setDailyGoal(n, reason = "") {
   const prev = state.goal.daily;
-  state.goal.daily = n;
+  state.goal.daily = Number.isFinite(n) ? Math.max(0, Math.min(20, n)) : prev;
   if (reason) state.goal.adjustLog.push({ date: dateKey(), from: prev, to: n, reason, at: Date.now() });
   save();
 }

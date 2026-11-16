@@ -384,14 +384,16 @@ function openAdjustSheet(sess, measured) {
   openSheet(`
     <h2>자습 종료</h2>
     <p class="muted">측정된 시간은 ${fmtMin(measured)}입니다. 실제 공부시간을 조정하시겠습니까?</p>
-    <div class="field"><label>실제 공부시간 (분)</label><input type="number" id="adj-min" value="${measured}" min="0" max="720"></div>
+    ${measured > store.MAX_SESSION_MIN ? `<p class="muted">측정된 시간이 ${Math.floor(store.MAX_SESSION_MIN / 60)}시간을 넘어 ${Math.floor(store.MAX_SESSION_MIN / 60)}시간(${store.MAX_SESSION_MIN}분)으로 기록됩니다.</p>` : ""}
+    <div class="field"><label>실제 공부시간 (분)</label><input type="number" id="adj-min" value="${Math.min(store.MAX_SESSION_MIN, measured)}" min="0" max="${store.MAX_SESSION_MIN}"></div>
     <div class="field"><label>조정 사유 (선택)</label><input type="text" id="adj-reason" placeholder="예: 자리 비움"></div>
     <button class="btn primary block" id="btn-confirm-stop">기록하고 종료</button>
   `, (sheet, close) => {
     $("#btn-confirm-stop", sheet).addEventListener("click", () => {
       const v = parseInt($("#adj-min", sheet).value, 10);
       const reason = $("#adj-reason", sheet).value.trim();
-      const s = store.finalizeSession(sess.id, isNaN(v) ? measured : Math.max(0, v), reason);
+      const fin = isNaN(v) ? Math.min(store.MAX_SESSION_MIN, measured) : Math.max(0, Math.min(store.MAX_SESSION_MIN, v));
+      const s = store.finalizeSession(sess.id, fin, reason);
       close();
     });
   });
