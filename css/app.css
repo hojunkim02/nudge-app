@@ -593,6 +593,14 @@ input.ren:focus { outline: none; }
   text-align: center;
 }
 @keyframes toastIn { from { opacity: 0; transform: translateY(16px) scale(0.9); } to { opacity: 1; transform: none; } }
+.toast.update {
+  pointer-events: auto;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--accent) 88%, transparent);
+  color: var(--on-fill);
+  padding: 13px 22px;
+}
+.toast.update:active { transform: scale(0.97); }
 
 /* ── Misc ───────────────────────────────── */
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; }

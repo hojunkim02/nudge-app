@@ -31,6 +31,40 @@ window.matchMedia = window.matchMedia || ((q) => ({ matches: false, media: q, ad
 if (!window.PointerEvent) window.PointerEvent = window.MouseEvent;
 window.scrollTo = () => {};
 
+const regListeners = {};
+let installingSw = null;
+let skipWaitingRequested = false;
+const fakeReg = {
+  installing: null,
+  waiting: null,
+  addEventListener(type, fn) { if (type === "updatefound") regListeners.updatefound = fn; },
+  update() {
+    if (fakeReg.updated) return Promise.resolve();
+    fakeReg.updated = true;
+    installingSw = {
+      state: "installing",
+      postMessage() { skipWaitingRequested = true; },
+      addEventListener(type, fn) { if (type === "statechange") installingSw._statechange = fn; },
+    };
+    fakeReg.installing = installingSw;
+    fakeReg.waiting = installingSw;
+    if (regListeners.updatefound) regListeners.updatefound();
+    setTimeout(() => {
+      installingSw.state = "installed";
+      if (installingSw._statechange) installingSw._statechange();
+    }, 0);
+    return Promise.resolve();
+  },
+};
+Object.defineProperty(window.navigator, "serviceWorker", {
+  configurable: true,
+  value: {
+    controller: { postMessage() {} },
+    addEventListener() {},
+    register() { return Promise.resolve(fakeReg); },
+  },
+});
+
 let failed = 0;
 const check = (name, cond) => {
   if (cond) console.log("PASS " + name);
@@ -71,6 +105,13 @@ if (checkRow) {
   setTimeout(() => {
     const saved = window.localStorage.getItem("nudge.data.v1");
     check("check toggle persists to localStorage", saved !== null && saved.includes("true"));
+    check("reg.update() was invoked on init", fakeReg.updated === true);
+    const updateBanner = document.querySelector("#toast-root .toast.update");
+    check("update banner appears when deployed version differs", !!updateBanner);
+    if (updateBanner) {
+      updateBanner.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+      check("update banner tap requests SW activation", skipWaitingRequested);
+    }
     console.log(failed === 0 && errors.length === 0 ? "SMOKE OK" : "SMOKE FAILED");
     process.exit(failed === 0 ? 0 : 1);
   }, 300);

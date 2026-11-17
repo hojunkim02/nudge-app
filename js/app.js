@@ -1422,6 +1422,39 @@ store.autoResolveLunch();
 scheduleNotifications();
 render();
 
+/* ── 업데이트 확인: 배포된 sw.js가 현재와 다르면 "눌러서 업데이트" 팝업 ── */
+function showUpdateBanner(newSw) {
+  if ($("#toast-root .toast.update")) return;
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (refreshing) return;
+    refreshing = true;
+    location.reload();
+  });
+  const t = document.createElement("div");
+  t.className = "toast update";
+  t.setAttribute("role", "button");
+  t.textContent = "새 버전이 있습니다 — 눌러서 업데이트";
+  t.addEventListener("click", () => { if (newSw) newSw.postMessage({ type: "SKIP_WAITING" }); });
+  $("#toast-root").appendChild(t);
+}
+
+function initUpdateCheck() {
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((reg) => {
+    reg.addEventListener("updatefound", () => {
+      const sw = reg.installing;
+      if (!sw) return;
+      sw.addEventListener("statechange", () => {
+        if (sw.state === "installed" && navigator.serviceWorker.controller) showUpdateBanner(reg.waiting || sw);
+      });
+    });
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg.waiting);
+    const check = () => { try { reg.update(); } catch (_) {} };
+    check();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
+  }).catch(() => {});
+}
+
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("sw.js").catch(() => {});
+  initUpdateCheck();
 }
