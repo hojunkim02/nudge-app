@@ -709,7 +709,7 @@ function viewWorkout() {
           const d = new Date(week); d.setDate(week.getDate() + i);
           const k = store.dateKey(d);
           const cls = ["day-dot", k === key ? "today" : "", weekDone[i] ? "done" : "", k === todayKey ? "is-today" : ""].filter(Boolean).join(" ");
-          return `<button class="${cls}" data-wday="${k}">${w}</button>`;
+          return `<button class="${cls}" data-wday="${k}">${store.WEEKDAYS[d.getDay()]}</button>`;
         }).join("")}
       </div>
       <p class="card-title">${store.fmtDate(selDate)} · ${part}${isRest ? "" : " 데이"}</p>
