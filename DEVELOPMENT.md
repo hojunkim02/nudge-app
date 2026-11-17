@@ -28,7 +28,7 @@
   3. `index.html`, `privacy.html`, `terms.html` HTML 공백 축약.
   4. `sw.js` terser minify + 캐시 이름 범프(`nudge-vN+1`) — 캐시 이름은 master의 현재 값에서 +1.
   5. `manifest.webmanifest` 한 줄 축소.
-- **삭제 파일**: `README.md`, `DEVELOPMENT.md`, `icons/generate.py`, `.gitignore`
+- **삭제 파일**: `README.md`, `DEVELOPMENT.md`, `icons/generate.py`, `.gitignore`, `test/`, `package.json`, `package-lock.json`, `node_modules/`
 - 완료 후 `git push --force-with-lease origin deploy`.
 - 빌드 후 반드시 스모크 테스트를 minify 산출물로 수행해 정상 동작을 확인한다.
 - 필요할 때만 갱신한다 (요청 없으면 매 커밋마다 재빌드하지 않음).
@@ -51,8 +51,9 @@
 
 ## 테스트
 
-- 스모크 테스트: jsdom 기반 (`/tmp/smoke.js`, 번들 산출물로 실행). 캐시/모듈은 세션 간 초기화될 수 있으므로 jsdom 재설치 필요.
-- 기능 변경 시 관련 회귀 테스트를 스모크에 추가한다.
+- 스모크 테스트: jsdom 기반 (`test/smoke.js`, `npm test`). 저장소에 커밋되어 있으므로 최초 1회만 `npm install` 하면 된다.
+- 기능 변경 시 `test/smoke.js`에 관련 회귀 테스트를 추가한다.
+- `test/`, `package.json` 등은 배포(deploy) 브랜치에 포함되지 않는다.
 
 ## 구글 캘린더 연동
 

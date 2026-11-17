@@ -1,0 +1,12 @@
+{
+  "name": "nudge-app",
+  "private": true,
+  "description": "Nudge — 학습·생활 관리 PWA (테스트 전용 매니페스트, 앱 자체는 빌드 없는 바닐라 JS)",
+  "scripts": {
+    "test": "node test/smoke.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "jsdom": "^24.0.0"
+  }
+}
