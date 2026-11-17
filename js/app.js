@@ -164,7 +164,7 @@ function viewToday() {
     const dn = store.dayChecks(k);
     const all = cs.length && cs.every((c) => dn[c.id] || (c.optional && s.lunch[k] === "no"));
     const cls = ["day-dot", k === key ? "today" : "", all ? "done" : "", k === todayKey ? "is-today" : ""].filter(Boolean).join(" ");
-    return `<button class="${cls}" data-day="${k}">${store.WEEKDAYS[d.getDay()]}</button>`;
+    return `<button class="${cls}" data-day="${k}">${store.WEEKDAYS[store.dowIndex(d)]}</button>`;
   }).join("");
 
   const pending = store.pendingSessions();
@@ -709,7 +709,7 @@ function viewWorkout() {
           const d = new Date(week); d.setDate(week.getDate() + i);
           const k = store.dateKey(d);
           const cls = ["day-dot", k === key ? "today" : "", weekDone[i] ? "done" : "", k === todayKey ? "is-today" : ""].filter(Boolean).join(" ");
-          return `<button class="${cls}" data-wday="${k}">${store.WEEKDAYS[d.getDay()]}</button>`;
+          return `<button class="${cls}" data-wday="${k}">${store.WEEKDAYS[store.dowIndex(d)]}</button>`;
         }).join("")}
       </div>
       <p class="card-title">${store.fmtDate(selDate)} · ${part}${isRest ? "" : " 데이"}</p>
@@ -734,7 +734,7 @@ function viewWorkout() {
       const now = new Date();
       const y = now.getFullYear(), m = now.getMonth();
       const daysInMonth = new Date(y, m + 1, 0).getDate();
-      const lead = new Date(y, m, 1).getDay();
+      const lead = store.dowIndex(new Date(y, m, 1));
       const cells = [];
       for (let i = 0; i < lead; i++) cells.push(`<span class="cal-cell"></span>`);
       let monthDone = 0;
@@ -748,7 +748,7 @@ function viewWorkout() {
     <div class="card">
       <p class="card-title">${m + 1}월 운동 기록 · ${monthDone}회 완료</p>
       <div class="cal-grid">
-        ${["일", "월", "화", "수", "목", "금", "토"].map((w) => `<span class="cal-head">${w}</span>`).join("")}
+        ${store.WEEKDAYS.map((w) => `<span class="cal-head">${w}</span>`).join("")}
         ${cells.join("")}
       </div>
     </div>`; })() : (!isRest && routine.length ? `
@@ -959,7 +959,7 @@ function openScheduleEdit() {
       });
     }));
     $("#btn-sched-add", sheet).addEventListener("click", () => {
-      let days = [1, 2, 3, 4, 5];
+      let days = [0, 1, 2, 3, 4];
       openSheet(`
         <h2>일정 항목 추가</h2>
         <div class="field"><label>제목</label><input type="text" id="sa-title" placeholder="예: 복습 정리 30분"></div>
