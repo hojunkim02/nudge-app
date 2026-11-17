@@ -1,21 +1,26 @@
 // Nudge store — localStorage persistence + schedule engine
 const KEY = "nudge.data.v1";
-const SCHEMA = 1;
+const SCHEMA = 2;
 export const MAX_SESSION_MIN = 1440; // 세션 1회 기록 상한 (24시간)
 
-export const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+export const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
+
+// 요일 인덱스는 항상 월요일=0 ~ 일요일=6 (Date.getDay의 일요일=0과 다름에 주의)
+export function dowIndex(d = new Date()) {
+  return (d.getDay() + 6) % 7;
+}
 
 const DEFAULT_SCHEDULE = [
-  { id: "wake", title: "기상 · 아침 준비 · 이동", time: "06:00–06:50", days: [1, 2, 3, 4, 5] },
-  { id: "morning", title: "오전 자습 120분", time: "06:50–08:50", days: [1, 2, 3, 4, 5] },
-  { id: "work", title: "복무 · 허용 시간 강의", time: "09:00–18:00", days: [1, 2, 3, 4, 5] },
-  { id: "lunch", title: "점심 자습 60분", time: "11:50–12:50", days: [1, 2, 3, 4, 5], optional: true },
-  { id: "evening", title: "저녁 자습 60분", time: "18:20–19:20", days: [0, 1, 2, 3, 4] },
+  { id: "wake", title: "기상 · 아침 준비 · 이동", time: "06:00–06:50", days: [0, 1, 2, 3, 4] },
+  { id: "morning", title: "오전 자습 120분", time: "06:50–08:50", days: [0, 1, 2, 3, 4] },
+  { id: "work", title: "복무 · 허용 시간 강의", time: "09:00–18:00", days: [0, 1, 2, 3, 4] },
+  { id: "lunch", title: "점심 자습 60분", time: "11:50–12:50", days: [0, 1, 2, 3, 4], optional: true },
+  { id: "evening", title: "저녁 자습 60분", time: "18:20–19:20", days: [0, 1, 2, 3, 6] },
   { id: "workout", title: "운동 또는 예정된 휴식", time: "19:20–20:50", days: [0, 1, 2, 3, 4, 5, 6] },
   { id: "shower", title: "샤워 · 이동", time: "20:50–21:20", days: [0, 1, 2, 3, 4, 5, 6] },
   { id: "winddown", title: "통화 · 저녁 식사", time: "21:20–22:50", days: [0, 1, 2, 3, 4, 5, 6] },
   { id: "bedtime", title: "취침 준비", time: "22:50–23:00", days: [0, 1, 2, 3, 4, 5, 6] },
-  { id: "rest", title: "휴식", time: "하루 종일", days: [6] },
+  { id: "rest", title: "휴식", time: "하루 종일", days: [5] },
 ];
 
 export const WORKOUT_CYCLE = ["등", "가슴", "어깨", "팔", "하체"];
@@ -47,7 +52,7 @@ function defaultState() {
     subjects: [],          // { id, name, chapters: [{ id, name, lectures: [{ id, name, status }] }] }
     goal: { daily: 10, adjustedToday: null, adjustLog: [] },
     workout: {
-      assign: { 1: "등", 2: "가슴", 3: "어깨", 4: "팔", 5: "하체", 0: "휴식", 6: "휴식" },
+      assign: { 0: "등", 1: "가슴", 2: "어깨", 3: "팔", 4: "하체", 5: "휴식", 6: "휴식" },
       routines: JSON.parse(JSON.stringify(DEFAULT_ROUTINES)),
       progress: { date: null, done: 0 },
       history: []
@@ -77,6 +82,20 @@ function load() {
     const base = defaultState();
     const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
     const st = { ...base, ...data };
+    const legacyDow = (typeof data.schema === "number" ? data.schema : 1) < 2;
+    if (legacyDow) {
+      // schema 1: 일요일=0 인덱스 → schema 2: 월요일=0 인덱스로 재매핑
+      if (Array.isArray(data.schedule)) {
+        st.schedule = st.schedule.map((c) => ({ ...c, days: Array.isArray(c.days) ? c.days.map((d) => (d + 6) % 7) : c.days }));
+      }
+      if (isObj(data.workout) && isObj(data.workout.assign)) {
+        const remapped = {};
+        for (let k = 0; k < 7; k++) remapped[(k + 6) % 7] = st.workout.assign[k];
+        st.workout.assign = remapped;
+      }
+      st.schema = SCHEMA;
+      try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { console.warn("migration save failed", e); }
+    }
     st.settings = isObj(data.settings) ? { ...base.settings, ...data.settings } : base.settings;
     st.goal = isObj(data.goal) ? { ...base.goal, ...data.goal } : base.goal;
     st.workout = isObj(data.workout) ? { ...base.workout, ...data.workout } : base.workout;
@@ -146,12 +165,12 @@ export function startOfWeek(d = new Date()) {
   return x;
 }
 export function fmtDate(d) {
-  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAYS[d.getDay()]})`;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAYS[dowIndex(d)]})`;
 }
 
 /* ── daily checklist ───────────────────── */
 export function checksForDate(d = new Date()) {
-  const dow = d.getDay();
+  const dow = dowIndex(d);
   return state.schedule.filter((c) => c.days.includes(dow));
 }
 export function scheduleItems() {
@@ -199,8 +218,8 @@ export function resetDay(key) {
 /* ── lunch decision (max 3 "yes" per Mon–Fri week) ── */
 export function autoResolveLunch() {
   const now = new Date();
-  const dow = now.getDay();
-  if (dow < 1 || dow > 5) return;
+  const dow = dowIndex(now);
+  if (dow > 4) return;
   const key = dateKey(now);
   if (state.lunch[key] !== undefined) return;
   const hm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -397,7 +416,7 @@ export function setDailyGoal(n, reason = "") {
 
 /* ── workout cycle ─────────────────────── */
 export function todayWorkout(d = new Date()) {
-  return state.workout.assign[d.getDay()] || "휴식";
+  return state.workout.assign[dowIndex(d)] || "휴식";
 }
 export function completeWorkout(rest = false) {
   const part = todayWorkout();

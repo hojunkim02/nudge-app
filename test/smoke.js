@@ -71,6 +71,33 @@ const check = (name, cond) => {
   else { failed++; console.log("FAIL " + name); }
 };
 
+// schema 1(일요일=0) 저장 데이터가 schema 2(월요일=0)로 마이그레이션되는지 검증
+{
+  const legacy = {
+    schema: 1,
+    schedule: [{ id: "legacy-item", title: "레거시", time: "10:00–11:00", days: [0, 1] }],
+    workout: { assign: { 1: "등", 0: "휴식" } },
+  };
+  const mdom = new JSDOM(html, {
+    url: "https://hojunkim02.github.io/nudge-app/",
+    runScripts: "outside-only",
+    pretendToBeVisual: true,
+  });
+  const mwin = mdom.window;
+  mwin.localStorage.setItem("nudge.data.v1", JSON.stringify(legacy));
+  mwin.matchMedia = mwin.matchMedia || ((q) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  if (!mwin.PointerEvent) mwin.PointerEvent = mwin.MouseEvent;
+  mwin.scrollTo = () => {};
+  mwin.navigator.serviceWorker = { controller: null, addEventListener() {}, register() { return Promise.resolve({ addEventListener() {} }); } };
+  try { mwin.eval(appJs); } catch (e) { console.log("FAIL migration eval: " + e.message); process.exit(1); }
+  const migrated = JSON.parse(mwin.localStorage.getItem("nudge.data.v1"));
+  check("legacy data migrated to schema 2", migrated.schema === 2);
+  const mItem = migrated.schedule.find((c) => c.id === "legacy-item");
+  check("legacy schedule days remapped to Monday-first", !!mItem && JSON.stringify(mItem.days) === JSON.stringify([6, 0]));
+  check("legacy workout assign remapped to Monday-first", migrated.workout.assign[0] === "등" && migrated.workout.assign[6] === "휴식");
+  mdom.window.close();
+}
+
 try {
   window.eval(appJs);
   check("app.js evaluates without throwing", true);
@@ -81,6 +108,9 @@ try {
 check("no runtime errors during init", errors.length === 0);
 check("view rendered with content", document.querySelector("#view").children.length > 0);
 check("view title set", (document.querySelector("#view-title").textContent || "").length > 0);
+
+const firstDot = document.querySelector(".day-dot");
+check("week strip starts Monday", !!firstDot && firstDot.textContent === "월");
 
 const tabs = [...document.querySelectorAll(".tab")];
 check("tabbar has 5 tabs", tabs.length === 5);
